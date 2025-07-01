@@ -22,7 +22,8 @@ class Battery(om.ExplicitComponent):
         self.add_output('power', val=np.zeros(nn), units='W')
         self.add_output('nominal_capacity', val=np.zeros(nn), units='A*h')
         self.add_output('energy', val=np.zeros(nn), units='W*h', desc='For an individual battery')
-        
+        ar = np.arange(nn)
+
         self.declare_partials(
             ['voltage_out', 'power'], 
             [
@@ -30,48 +31,53 @@ class Battery(om.ExplicitComponent):
                 'current', 
                 Aircraft.Engine.Battery.RESISTANCE
                 ],
+            rows=ar, cols=ar
         )
         #TODO: check if arange is necessary
 
         self.declare_partials(
             'nominal_capacity',
             Aircraft.Engine.Battery.MASS,
+            rows=ar, cols=ar,
         )
 
         self.declare_partials(
             'energy',
             [
                 Aircraft.Engine.Battery.MASS,
-                'nominal_capacity'
-            ]
+                Aircraft.Engine.Battery.VOLTAGE,
+            ],
+            rows=ar, cols=ar
         )
 
     def compute(self, inputs, outputs):
         V = inputs[Aircraft.Engine.Battery.VOLTAGE]
         I = inputs['current']
-        R = inputs['resistance']
+        R = inputs[Aircraft.Engine.Battery.RESISTANCE]
 
         outputs['nominal_capacity'] = inputs[Aircraft.Engine.Battery.MASS] * 7.3 - 0.246 # Per Peter Sharpe TODO VERIFY
         outputs['energy'] = V * outputs['nominal_capacity']
-        outputs['voltage_out'] = V * I - I**2 * R
+        outputs['power'] = V * I - I**2 * R
+        outputs['voltage_out'] = V - I * R
 
     def compute_partials(self, inputs, outputs, partials):
         V = inputs[Aircraft.Engine.Battery.VOLTAGE]
         I = inputs['current']
-        R = inputs['resistance']
+        R = inputs[Aircraft.Engine.Battery.RESISTANCE]
+        nominal_capacity = inputs[Aircraft.Engine.Battery.MASS] * 7.3 - 0.246
 
         partials['voltage_out', Aircraft.Engine.Battery.VOLTAGE] = 1
         partials['voltage_out', 'current'] = -R
-        partials['voltage_out', 'resistance'] = -I
+        partials['voltage_out', Aircraft.Engine.Battery.RESISTANCE] = -I
 
         partials['power', 'voltage_supply'] = I
         partials['power', 'current'] = V - 2 * I * R
-        partials['power', 'resistance'] = -I**2
+        partials['power', Aircraft.Engine.Battery.RESISTANCE] = -I**2
 
         partials['nominal_capacity', Aircraft.Engine.Battery.MASS] = 7.3
 
-        partials['energy', Aircraft.Engine.Battery.VOLTAGE] = outputs['nominal_capacity']
-        partials['energy', 'nominal_capacity'] = V
+        partials['energy', Aircraft.Engine.Battery.VOLTAGE] = nominal_capacity
+        partials['energy', 'mass'] = V * 7.3
 
 
 class ElectronicSpeedController(om.ExplicitComponent):
@@ -92,12 +98,13 @@ class ElectronicSpeedController(om.ExplicitComponent):
         self.add_output('efficiency', val=np.zeros(nn), units='unitless')
         self.add_output('voltage_out', val=np.zeros(nn), units = 'V')
         self.add_output('current_out', val=np.zeros(nn), units = 'A')
-        self.add_output('power', val=np.eros(nn), units = 'W')
+        self.add_output('power', val=np.zeros(nn), units = 'W')
+        ar = np.arange(nn)
 
-        self.declare_partials('efficiency', 'throttle')
-        self.declare_partials('voltage_out', ['voltage_in', 'throttle'])
-        self.declare_partials('current_out', ['current_in', 'throttle'])
-        self.declare_partials('power', ['voltage_in', 'current_in', 'throttle'])
+        self.declare_partials('efficiency', 'throttle', rows=ar, cols=ar)
+        self.declare_partials('voltage_out', ['voltage_in', 'throttle'], rows=ar, cols=ar)
+        self.declare_partials('current_out', ['current_in', 'throttle'], rows=ar, cols=ar)
+        self.declare_partials('power', ['voltage_in', 'current_in', 'throttle'], rows=ar, cols=ar)
 
     def compute(self, inputs, outputs):
         
@@ -140,12 +147,15 @@ class Motor(om.ExplicitComponent):
         add_aviary_input(self, Aircraft.Engine.Motor.IDLE_CURRENT, val=np.zeros(nn), units='A')
         add_aviary_input(self, Aircraft.Engine.Motor.PEAK_CURRENT, val=np.zeros(nn), units='A')
         add_aviary_input(self, Aircraft.Engine.Motor.RESISTANCE, val=np.zeros(nn), units='ohm')
-        add_aviary_input(self, Aircraft.Engine.Motor.KV, val=np.zeros(nn), units='A')
+        add_aviary_input(self, Aircraft.Engine.Motor.KV, val=np.zeros(nn), units='rpm/V')
+        add_aviary_input(self, Aircraft.Engine.Motor.MASS, val=np.zeros(nn), units ='kg')
         self.add_input('voltage_in', val=np.zeros(nn), units = 'V')
         self.add_input('current', val=np.zeros(nn), units = 'A')
-        
+
         add_aviary_output(self, Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), units='rpm')
         self.add_output('power', val=np.zeros(nn), units='W')
+        self.add_output('current_con', val=np.zeros(nn), units="A")
+        ar=np.arange(nn)
 
         self.declare_partials(
             [
@@ -159,6 +169,13 @@ class Motor(om.ExplicitComponent):
                 Aircraft.Engine.Motor.KV, 
                 Aircraft.Engine.Motor.IDLE_CURRENT,
             ],
+            rows=ar, cols=ar
+        )
+
+        self.declare_partials(
+            'current_con',
+            ['current', Aircraft.Engine.Motor.PEAK_CURRENT],
+            rows=ar, cols=ar
         )
 
     def compute(self, inputs, outputs):
@@ -168,7 +185,8 @@ class Motor(om.ExplicitComponent):
         voltage_prop = inputs['voltage_in'] - inputs['current'] * R
 
         outputs[Dynamic.Vehicle.Propulsion.RPM] = kv * voltage_prop
-        outputs['power'] = -inputs['current']**2 * R - Aircraft.Engine.Motor.IDLE_CURRENT * voltage_prop
+        outputs['power'] = -inputs['current']**2 * R - inputs['Aircraft.Engine.Motor.IDLE_CURRENT'] * voltage_prop
+        outputs["current_con"] = inputs["current"] - inputs[Aircraft.Engine.Motor.PEAK_CURRENT] #TODO verify this is best way to do
 
     def compute_partials(self, inputs, partials):
         R = inputs[Aircraft.Engine.Motor.RESISTANCE]
@@ -190,243 +208,10 @@ class Motor(om.ExplicitComponent):
         partials['power', Aircraft.Engine.Motor.KV] = 0
         partials['power', Aircraft.Engine.Motor.IDLE_CURRENT] = -voltage_prop
         
-
-# import pickle
-# #TODO: make sure I'm allowed to do this, otherwise going to be annoying
-# # from smt.surrogate_models import KPLSK 
-# class PropCoefficients(om.ExplicitComponent):
-#     """Encapsulated surrogate model to compute thrust and power
-#     coefficients from prop dimensions and flight conditions
-#     using Surrogate Modeling Toolbox
-#     https://smt.readthedocs.io/en/latest/index.html
-
-#     """
-
-#     def initialize(self):
-#         self.options.declare("flight_conds", default = 3, desc= "Number of Flight Conditions to Analyze")
-#         self.options.declare("flight_missions", default = 2, desc = "Number of Flight Missions ot Analyze")
-#         self.options.declare("props", default = 1, desc="Number of Props to optimize, should be no more than fm")
-
-#         """Initializing surrogate model, reading and sampling data"""
-#         '''
-#         self.thrust_sm = KPLSK(n_comp=4, eval_noise=True, print_global=False)
-#         self.power_sm = KPLSK(n_comp=4, eval_noise=True, print_global=False)
-
-#         x, ct, cp = PropDataReader()
-#         x, ct, cp, xVal, ctVal, cpVal = SampleDataLHScosine(x, ct, cp)
-
-#         xlim = np.array(
-#             [
-#                  [np.min(x[:, 0]), np.max(x[:, 0]) + 1],
-#                  [np.min(x[:, 1]), np.max(x[:, 1]) + 1],
-#                  [np.min(x[:, 2]), np.max(x[:, 2]) + 1],
-#                  [np.min(x[:, 3]), np.max(x[:, 3]) + 1],
-#             ]
-#         )
-
-#         self.thrust_sm.set_training_values(x, ct)
-#         self.thrust_sm.train()
-#         self.power_sm.set_training_values(x, cp)
-#         self.power_sm.train()
-
-#         with open("PickledSurrogateModels/power_sm.pkl", "wb") as fp:
-#             pickle.dump(self.power_sm, fp)
-#         with open("PickledSurrogateModels/thrust_sm.pkl", "wb") as fp:
-#             pickle.dump(self.thrust_sm, fp)
-#         '''
-
-#         with open(
-#             "PickledSurrogateModels/power_sm.pkl", #Now using 1.3.0
-#             "rb",
-#         ) as fp:
-#             self.power_sm = pickle.load(fp) 
-#         with open(
-#             "PickledSurrogateModels/thrust_sm.pkl", #Now using 1.3.0
-#             "rb",
-#         ) as fp:
-#             self.thrust_sm = pickle.load(fp)
-#             #'''
-
-#     def setup(self):
-#         fc = self.options["flight_conds"]
-#         fm = self.options["flight_missions"]
-#         p=self.options["props"]
-#         self.add_input("D_prop", units="m", shape = p, desc="propeller diameter")
-#         self.add_input("pitch", units="deg", shape = p, desc="propeller pitch")
-
-#         self.add_input('rpm', shape = (fc ,fm), units = "rev/s")
-#         self.add_input('velocity', shape = (fc ,fm), units = "m/s")
-#         self.add_output('ct', shape = (fc ,fm),desc = "thrust coefficients")
-#         self.add_output('cp', shape = (fc ,fm),desc="power coefficients")
-
-#         self.declare_partials('*', '*')
-
-#     def compute_partials(self, inputs, partials):
-#         fc = self.options["flight_conds"]
-#         fm = self.options["flight_missions"]
-#         p=self.options["props"]
-#         D = inputs["D_prop"]
-#         pitch = inputs["pitch"]
-#         n = inputs['rpm']
-#         V = inputs['velocity']
-#         #Create empty array for each condition depending on how many are declared
-#         #Fill the conditiosn with the amount of flight missions that have been declared
-#         x=0
-#         cond = []
-#         #For the diameter and pitch, when adding multiprop, will be D[y]
-#         if p > 1:
-#             while x < fc:
-#                 y= 0
-#                 while y < fm:
-#                     temps = np.ndarray((0,4))
-#                     temps = [np.vstack((temps, np.array([D[y], pitch[y], n[x][y], V[x][y]])))]
-#                     cond.append(temps)
-#                     y+=1
-#                 x+=1
-#         if p == 1: 
-#             while x < fc:
-#                     y= 0
-#                     while y < fm:
-#                         temps = np.ndarray((0,4))
-#                         temps = [np.vstack((temps, np.array([D[0], pitch[0], n[x][y], V[x][y]])))]
-#                         cond.append(temps)
-#                         y+=1
-#                     x+=1
-
-#         #Predict the partials for each condition with respect to each (First declare range of conditions)
-#         ranger = int(np.size(cond)/4)
-
-#         #Diameter
-#         tdzeros = np.zeros((fc * fm , p))
-#         td = []
-#         for z in range(ranger):
-#             appender=self.thrust_sm.predict_derivatives(cond[z][0], 0)
-#             td.append(appender)
-#         for m in range(p):
-#             for r in range(m,fc * fm, p):
-#                 tdzeros[r][m]= td[r]
-#         partials["ct", "D_prop"] = tdzeros
-
-#         pdzeros = np.zeros((fc * fm , p))
-#         pd = []
-#         for z in range(ranger):
-#             appender=self.power_sm.predict_derivatives(cond[z][0], 0)
-#             pd.append(appender)
-#         for m in range(p):
-#             for r in range(m,fc * fm, p):
-#                 pdzeros[r][m]= pd[r]
-#         partials["cp", "D_prop"] = pdzeros
-
-#         #Pitch 
-#         tpzeros = np.zeros((fc * fm , p))
-#         tp = []
-#         for z in range(ranger):
-#             appender=self.thrust_sm.predict_derivatives(cond[z][0], 1)
-#             tp.append(appender)
-#         for m in range(p):
-#             for r in range(m,fc * fm, p):
-#                 tpzeros[r][m]= tp[r]
-#         partials["ct", "pitch"] = tpzeros
-
-#         ppzeros = np.zeros((fc * fm ,  p))
-#         pp = []
-#         for z in range(ranger):
-#             appender=self.power_sm.predict_derivatives(cond[z][0], 1)
-#             pp.append(appender)
-#         for m in range(p):
-#             for r in range(m,fc * fm, p):
-#                 ppzeros[r][m]= pp[r]
-#         partials["cp", "pitch"] = ppzeros
-
-#         #RPM
-#         tnzeros = np.zeros((fc * fm , fc * fm))
-#         tn = []
-#         for z in range(ranger):
-#             appender=self.thrust_sm.predict_derivatives(cond[z][0], 2)
-#             tn.append(appender)
-#         np.fill_diagonal(
-#             tnzeros,
-#             tn
-#         )
-#         partials["ct", "rpm"] = tnzeros
-
-#         pnzeros = np.zeros((fc * fm , fc * fm ))
-#         pn = []
-#         for z in range(ranger):
-#             appender= self.power_sm.predict_derivatives(cond[z][0], 2)
-#             pn.append(appender)
-#         np.fill_diagonal(
-#             pnzeros,
-#             pn
-#         )
-#         partials["cp", "rpm"] = pnzeros
-
-#         #Velocity
-#         tvzeros = np.zeros((fc * fm , fc * fm))
-#         tv = []
-#         for z in range(ranger):
-#             appender=self.thrust_sm.predict_derivatives(cond[z][0], 3)
-#             tv.append(appender)
-#         np.fill_diagonal(
-#             tvzeros,
-#             tv
-#         )
-#         partials["ct", "velocity"] = tvzeros
-        
-#         pvzeros = np.zeros((fc * fm , fc * fm ))
-#         pv = []
-#         for z in range(ranger):
-#             appender= self.power_sm.predict_derivatives(cond[z][0], 3)
-#             pv.append(appender)
-#         np.fill_diagonal(
-#             pvzeros,
-#             pv
-#         )
-#         partials["cp", "velocity"] = pvzeros
-    
-#     def compute(self, inputs, outputs):
-#         fc = self.options["flight_conds"]
-#         fm = self.options["flight_missions"]
-#         p = self.options["props"]
-#         D = inputs["D_prop"]
-#         pitch = inputs["pitch"]
-#         n = inputs['rpm']
-#         V = inputs['velocity']
-#         #Create empty array for each condition depending on how many are declared
-#         #Fill the conditiosn with the amount of flight missions that have been declared
-#         x=0
-#         cond = []
-#         #For the diameter and pitch, when adding multiprop, will be D[y], &&
-#         if p > 1: 
-#             while x < fc:
-#                 y= 0
-#                 while y < fm:
-#                     appender = np.array([D[y], pitch[y], n[x][y], V[x][y]])
-#                     cond.append(appender)
-#                     y+=1
-#                 x+=1
-#         if p == 1: 
-#             while x < fc:
-#                 y= 0
-#                 while y < fm:
-#                     appender = np.array([D[0], pitch[0], n[x][y], V[x][y]])
-#                     cond.append(appender)
-#                     y+=1
-#                 x+=1
-#         #Unlike in partials, here one stacks all conditions, predicting all at once. 
-#         topredict = np.vstack(cond)
-        
-#         #test this first, if it works could be crazy
-#         outputs["ct"] = self.thrust_sm.predict_values(topredict)
-#         outputs["cp"] = self.power_sm.predict_values(topredict)
+        partials['current_con', Aircraft.Engine.Motor.PEAK_CURRENT] = -1
+        partials['current_con', 'current'] = 1
 
 
-class PropCoefficients(om.MetaModelSemiStructuredComp):
-    def initialize(self):
-        self.options.declare('num_nodes', default=1, types=int)
-   
-    def setup(self): 
-        nn = self.options['num_nodes']
 class Propeller(om.ExplicitComponent):
     def initialize(self):
         self.options.declare('num_nodes', default=1, types=int)
@@ -435,14 +220,15 @@ class Propeller(om.ExplicitComponent):
         nn = self.options['num_nodes']
         add_aviary_input(self, Dynamic.Atmosphere.DENSITY, val=np.zeros(nn), units = 'kg/m**3')
         add_aviary_input(self, Aircraft.Engine.Propeller.DIAMETER, units = 'm')
-        add_aviary_input(self, Dynamic.Vehicle.Propulsion.RPM, units = 'rev/s')
+        add_aviary_input(self, Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), units = 'rev/s')
         self.add_input("ct", val=np.zeros(nn), units='unitless')
         self.add_input("cp", val=np.zeros(nn), units='unitless')
-        add_aviary_input(self, Aircraft.Engine.NUM_ENGINES, val=np.zeros(nn), units='unitless')
+        add_aviary_input(self, Aircraft.Engine.NUM_ENGINES, val=np.zeros(nn), units='unitless') #TODO verify no number of nodes and change eventually
 
         add_aviary_output(self, Dynamic.Vehicle.Propulsion.PROP_THRUST, val=np.zeros(nn), units='N')
         add_aviary_output(self, Dynamic.Vehicle.Propulsion.PROP_POWER, val=np.zeros(nn), units='W')
-        
+        ar =np.arange(nn)
+
         self.declare_partials(
             Dynamic.Vehicle.Propulsion.PROP_THRUST,
             [
@@ -452,6 +238,7 @@ class Propeller(om.ExplicitComponent):
                 'ct',
                 Aircraft.Engine.NUM_ENGINES,
             ],
+            rows=ar, cols=ar,
         )
 
         self.declare_partials(
@@ -462,6 +249,7 @@ class Propeller(om.ExplicitComponent):
                 Dynamic.Vehicle.Propulsion.RPM,
                 'cp',
             ],
+            rows=ar, cols=ar
         )
 
     def compute(self, inputs, outputs):
@@ -498,29 +286,60 @@ class PowerResiduals(om.ImplicitComponent):
         self.add_input('power_batt', val=np.zeros(nn), units='W')
         self.add_input('power_esc', val=np.zeros(nn), units='W')
         self.add_input('power_motor', val=np.zeros(nn), units='W')
-        add_aviary_input(self, Dynamic.Vehicle.Propulsion.PROP_POWER, val=np.zeros(nn), units='W')
+        add_aviary_input(self, Dynamic.Vehicle.Propulsion.PROP_POWER, val=np.zeros(nn), units='W') #TODO verify no connection needed in group
+        
+        #We want to make a good initial guess on the current
+        self.add_output('current', val=np.ones(nn)*30, units='A') 
+        self.add_residual('power_net', shape=(nn, ), units='W')
 
-        self.add_output('current', val=np.ones(nn)*30, units='A') #we want to make a good initial guess on the current
-        self.add_residual('power_net', shape=nn, units='W')
-
-        self.declare_partials('current', ['power_batt', 'power_esc', 'power_motor',  Dynamic.Vehicle.Propulsion.PROP_POWER], val = 1)
+        self.declare_partials('*', '*', method='cs') #TODO try to change
 
     def apply_nonlinear(self, inputs, residuals):
         residuals['current'] = inputs['power_batt'] + inputs['power_esc'] + inputs['power_motor'] - inputs[Dynamic.Vehicle.Propulsion.PROP_POWER]
 
-
+#TODO: reading in of data should be changed later:
+from Parsing.PropDataReader import PropDataReader
+from Parsing.LHS_cosine_Datasampler import SampleDataLHScosine
+x, ct, cp = PropDataReader()
+x, ct, cp, _, _, _ = SampleDataLHScosine(x, ct, cp)
 class RCPropGroup(om.Group):
+    def initialize(self):
+        self.options.declare('num_nodes', default=1, types=int)
     def setup(self):
+        nn = self.options['num_nodes']
         self.add_subsystem('battery', Battery())
         self.add_subsystem('esc', ElectronicSpeedController())
-        self.add_subsystem('motor', Motor())
-        self.add_subsystem('propco', PropCoefficients())
-        self.add_subsystem('prop', Propeller())
-        self.add_subsystem('net_power', PowerResiduals())
+        self.add_subsystem('motor', Motor(), promotes_outputs=Dynamic.Vehicle.Propulsion.RPM)
+        prop_coef = om.MetaModelUnStructuredComp(vec_size = nn, default_surrogate = om.KrigingSurrogate(eval_rmse=True, training_cache='rc_surrogate'))
+        #TODO: check promotions
+        self.add_subsystem(
+            'propco', 
+            prop_coef, 
+            promotes_inputs=[
+                Dynamic.Vehicle.Propulsion.RPM, 
+                Dynamic.Mission.VELOCITY, 
+                Aircraft.Engine.Propeller.DIAMETER, 
+                Aircraft.Engine.Propeller.PITCH
+            ],
+            promotes_outputs=['ct', 'cp']
+        )
+        add_aviary_input(prop_coef, Aircraft.Engine.Propeller.DIAMETER, val=np.zeros(nn), training_data=x[:, 0], units = 'm')
+        add_aviary_input(prop_coef, Aircraft.Engine.Propeller.PITCH, training_data=x[:, 1], units='deg')
+        add_aviary_input(prop_coef, Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), training_data=x[:, 2], units = 'rev/s')
+        add_aviary_input(prop_coef, Dynamic.Mission.VELOCITY, val = np.zeros(nn), training_data = x[:,3], units='m/s')
+
+        prop_coef.add_output('ct', val=np.zeros(nn), training_data = ct, units='unitless', surrogate = om.KrigingSurrogate(eval_rmse = True, lapack_driver='gesdd', training_cache = 'thrust_surrogate'))
+        prop_coef.add_output('cp', val=np.zeros(nn), training_data = cp, units='unitless', surrogate = om.KrigingSurrogate(eval_rmse = True, lapack_driver='gesdd', training_cache = 'power_surrogate'))
+
+        self.add_subsystem(
+            'prop', 
+            Propeller(), 
+            promotes_inputs=[Aircraft.Engine.Propeller.Diameter, Aircraft.Engine.Propeller.PITCH, 'ct', 'cp', Aircraft.Engine.NUM_ENGINES, Dynamic.Atmosphere.DENSITY])
+        self.add_subsystem('power_net', PowerResiduals())
 
         self.connect('battery.voltage_out', 'esc.voltage_in')
         self.connect('esc.voltage_out', 'motor.voltage_in')
-        self.connect('esc.current_in', 'motor.current')
+        self.connect('esc.current_out', 'motor.current')
         # self.connect('motor.rpm', prop.rpm) TODO check if this is needed
 
         self.connect('battery.power', 'power_net.power_batt')
@@ -528,7 +347,3 @@ class RCPropGroup(om.Group):
         self.connect('motor.power', 'power_net.power_motor')
         self.connect('power_net.current', ['battery.current', 'esc.current_in'])
         # self.connect('prop.power', 'power_net.power_prop') TODO check if this is needed
-
-
-        
-    
