@@ -324,7 +324,7 @@ class RCPropGroup(om.Group):
             promotes_outputs=['ct', 'cp']
         )
         add_aviary_input(prop_coef, Aircraft.Engine.Propeller.DIAMETER, val=np.zeros(nn), training_data=x[:, 0], units = 'm')
-        add_aviary_input(prop_coef, Aircraft.Engine.Propeller.PITCH, training_data=x[:, 1], units='deg')
+        add_aviary_input(prop_coef, Aircraft.Engine.Propeller.PITCH, training_data=x[:, 1], units='inch')
         add_aviary_input(prop_coef, Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), training_data=x[:, 2], units = 'rev/s')
         add_aviary_input(prop_coef, Dynamic.Mission.VELOCITY, val = np.zeros(nn), training_data = x[:,3], units='m/s')
 
