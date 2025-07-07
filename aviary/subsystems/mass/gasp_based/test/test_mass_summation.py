@@ -4,7 +4,7 @@ import openmdao.api as om
 from openmdao.utils.assert_utils import assert_check_partials, assert_near_equal
 from openmdao.utils.testing_utils import use_tempdirs
 
-from aviary.models.large_single_aisle_1.V3_bug_fixed_IO import (
+from aviary.models.aircraft.large_single_aisle_1.V3_bug_fixed_IO import (
     V3_bug_fixed_non_metadata,
     V3_bug_fixed_options,
 )
@@ -1163,6 +1163,14 @@ class MassSummationTestCase4(unittest.TestCase):
         assert_near_equal(self.prob['wing_mass.isolated_wing_mass'], 15653, tol)
 
         # fuel values:
+        assert_near_equal(
+            self.prob['fuel_mass.fuel_and_oem.OEM_wingfuel_mass'], 79474.11569854, tol
+        )  # modified from GASP value to account for updated crew mass. GASP value is 78966.7
+
+        assert_near_equal(
+            self.prob['fuel_mass.fus_mass_full'], 101867.46, tol
+        )  # calculated by hand,  #modified from GASP value to account for updated crew mass. GASP value is 102501.95695930265
+        assert_near_equal(self.prob[Aircraft.Fuel.FUEL_SYSTEM_MASS], 1960.68, tol)
         assert_near_equal(
             self.prob['fuel_mass.fuel_and_oem.OEM_wingfuel_mass'], 79474.11569854, tol
         )  # modified from GASP value to account for updated crew mass. GASP value is 78966.7

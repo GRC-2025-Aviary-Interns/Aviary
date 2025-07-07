@@ -1,12 +1,11 @@
 import csv
-import importlib.util
 import inspect
 import json
 import os
-import sys
 import warnings
 from datetime import datetime
 from enum import Enum
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 import dymos as dm
@@ -18,18 +17,18 @@ from openmdao.utils.reports_system import _default_reports
 from aviary.core.AviaryGroup import AviaryGroup
 from aviary.core.PostMissionGroup import PostMissionGroup
 from aviary.core.PreMissionGroup import PreMissionGroup
-from aviary.interface.default_phase_info.two_dof_fiti import add_default_sgm_args
 from aviary.mission.gasp_based.phases.time_integration_traj import FlexibleTraj
 from aviary.mission.height_energy_problem_configurator import HeightEnergyProblemConfigurator
 from aviary.mission.solved_two_dof_problem_configurator import SolvedTwoDOFProblemConfigurator
 from aviary.mission.two_dof_problem_configurator import TwoDOFProblemConfigurator
+from aviary.models.missions.two_dof_fiti_default import add_default_sgm_args
 from aviary.subsystems.aerodynamics.aerodynamics_builder import CoreAerodynamicsBuilder
 from aviary.subsystems.geometry.geometry_builder import CoreGeometryBuilder
 from aviary.subsystems.mass.mass_builder import CoreMassBuilder
 from aviary.subsystems.premission import CorePreMission
 from aviary.subsystems.propulsion.propulsion_builder import CorePropulsionBuilder
 from aviary.utils.aviary_values import AviaryValues
-from aviary.utils.functions import convert_strings_to_data
+from aviary.utils.functions import convert_strings_to_data, get_path
 from aviary.utils.merge_variable_metadata import merge_meta_data
 from aviary.utils.preprocessors import preprocess_options
 from aviary.utils.process_input_decks import create_vehicle, update_GASP_options
@@ -193,34 +192,22 @@ class AviaryProblem(om.Problem):
             aviary_inputs = update_GASP_options(aviary_inputs)
 
         ## LOAD PHASE_INFO ###
+        # if phase info is a file, load it
+        if isinstance(phase_info, str) or isinstance(phase_info, Path):
+            phase_info_path = get_path(phase_info)
+            phase_info_file = SourceFileLoader(
+                'phase_info_file', str(phase_info_path)
+            ).load_module()
+            phase_info = getattr(phase_info_file, 'phase_info')
+
         if phase_info is None:
-            # check if the user generated a phase_info from gui
-            # Load the phase info dynamically from the current working directory
-            phase_info_module_path = Path.cwd() / 'outputted_phase_info.py'
+            phase_info = self.configurator.get_default_phase_info(self)
 
-            if phase_info_module_path.exists():
-                spec = importlib.util.spec_from_file_location(
-                    'outputted_phase_info', phase_info_module_path
+            if verbosity is not None and verbosity >= Verbosity.BRIEF:
+                print(
+                    f'Loaded default phase_info for {self.mission_method.value.lower()} equations '
+                    'of motion.'
                 )
-                outputted_phase_info = importlib.util.module_from_spec(spec)
-                sys.modules['outputted_phase_info'] = outputted_phase_info
-                spec.loader.exec_module(outputted_phase_info)
-
-                # Access the phase_info variable from the loaded module
-                phase_info = outputted_phase_info.phase_info
-
-                # if verbosity level is BRIEF or higher, print that we're using the
-                # outputted phase info
-                if verbosity >= Verbosity.BRIEF:
-                    print('Using outputted phase_info from current working directory')
-            else:
-                phase_info = self.configurator.get_default_phase_info(self)
-
-                if verbosity is not None and verbosity >= Verbosity.BRIEF:
-                    print(
-                        'Loaded default phase_info for '
-                        f'{self.mission_method.value.lower()} equations of motion'
-                    )
 
         # create a new dictionary that only contains the phases from phase_info
         self.phase_info = {}
@@ -301,13 +288,38 @@ class AviaryProblem(om.Problem):
                             analytic = phase['user_options']['analytic'] = False
 
                 if 'time_duration' in phase['user_options']:
-                    time_duration = phase['user_options']['time_duration']
-                    if time_duration[0] is not None and time_duration[0] <= 0:
+                    time_duration, units = phase['user_options']['time_duration']
+
+                    if time_duration is None:
+                        continue
+
+                    if time_duration <= 0:
                         raise ValueError(
                             f'Invalid time_duration in phase_info[{phase_name}]'
                             f'[user_options]. Current (value: {time_duration[0]}), '
                             f'(units: {time_duration[1]}) <= 0")'
                         )
+
+                    if 'initial_guesses' not in phase:
+                        phase['initial_guesses'] = {}
+
+                    guesses = phase['initial_guesses']
+                    if 'time' in guesses:
+                        time_guess, units_guess = guesses['time']
+
+                        if time_guess[1] is not None:
+                            msg = f'Duration initial guess of {time_guess[1]} {units_guess} '
+                            msg += f'specified on fixed duration phase for phase {phase_name}. '
+                            msg += f'Using fixed value of {time_duration} {units} instead.'
+                            print(msg)
+
+                        time_duration_conv = wrapped_convert_units(
+                            (time_duration, units), units_guess
+                        )
+                        guesses['time'] = ((time_guess[0], time_duration_conv), units_guess)
+
+                    else:
+                        guesses['time'] = ((None, time_duration), units)
 
         for phase_name in self.phase_info:
             for external_subsystem in self.phase_info[phase_name]['external_subsystems']:
