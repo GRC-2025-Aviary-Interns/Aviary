@@ -331,6 +331,15 @@ add_meta_data(
     default_value=0.0,
 )
 
+add_meta_data(
+    Aircraft.Battery.VOLTAGE,
+    meta_data=_MetaData,
+    historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
+    units='V',
+    desc='Total voltage input from the battery pack',
+    default_value=0.0,
+)
+
 
 #  ____    _                      _              _    __          __  _                     ____                _
 # |  _ \  | |                    | |            | |   \ \        / / (_)                   |  _ \              | |

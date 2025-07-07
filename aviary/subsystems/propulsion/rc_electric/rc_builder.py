@@ -32,14 +32,44 @@ class RCBuilder(SubsystemBuilderBase):
         # TODO add the rest of the resign variables, also remove the feature as an external subsystem
         # TODO check with eliot about adding potentially new design variables (i.e. kv can be declared or calculated)
         DVs = {
+            Aircraft.Battery.MASS: {
+                'units': 'kg',
+                'lower': 0.0,
+                'upper': None,
+                # 'val': 100,  
+            },
+            Dynamic.Vehicle.Propulsion.THROTTLE: {
+                'units': 'unitless',
+                'lower': 0.01,
+                'upper': 1.0,
+                # 'val': 0.5,  
+            },
+            Aircraft.Engine.Motor.IDLE_CURRENT: {
+                'units': 'A',
+                'lower': 1.0,
+                'upper': 3.6, #TODO: this placeholder can be varied
+                # 'val': 2.2,  
+            },
+            Aircraft.Engine.Motor.PEAK_CURRENT: {
+                'units': 'A',
+                'lower': 1,
+                'upper': 225,
+                # 'val': 100,  
+            },
+            Aircraft.Engine.Motor.MASS: {
+                'units': 'kg',
+                'lower': 0.288,
+                'upper': 1.701,
+                # 'val': 1.0,  
+            },
             Aircraft.Engine.Propeller.PITCH: {
                 'units': 'inch',
-                'lower': 100,
-                'upper': 200,
+                'lower': 0.0,
+                'upper': None,
                 # 'val': 100,  # initial value
             },
             Aircraft.Engine.Propeller.DIAMETER: {
-                'units': 'in',
+                'units': 'm',
                 'lower': 0.0,
                 'upper': None,
                 # 'val': 8,  # initial value
@@ -65,14 +95,54 @@ class RCBuilder(SubsystemBuilderBase):
 
         #TODO add new variables, including dvs and optional inputs
         parameters = {
+            Aircraft.Battery.MASS: {
+                'val': 1.0, 
+                'units': 'kg',
+            },
+            Aircraft.Battery.VOLTAGE: {
+                'val': 22.2, 
+                'units': 'V',
+            },
+            Aircraft.Battery.RESISTANCE: {
+                'val': 0.05, 
+                'units': 'ohm',
+            },
+            Dynamic.Vehicle.Propulsion.THROTTLE: {
+                'val': 0.5,  
+                'units': 'unitless',
+            },
+            Aircraft.Engine.Motor.RESISTANCE: {
+                'val': 0.05,  
+                'units': 'ohm',
+            },
+            Aircraft.Engine.Motor.KV: {
+                'val': 400,  
+                'units': 'rpm/V',
+            },
+            Aircraft.Engine.Motor.IDLE_CURRENT: {
+                'val': 2.2,  
+                'units': 'A',
+            },
+            Aircraft.Engine.Motor.PEAK_CURRENT: {
+                'val': 100,  
+                'units': 'A',
+            },
+            Aircraft.Engine.Motor.MASS: {
+                'val': 0.0, 
+                'units': 'kg', 
+            },
             Aircraft.Engine.Propeller.DIAMETER: {
                 'val': 0.0,
-                'units': 'ft',
+                'units': 'm',
             },
-            Aircraft.Nacelle.PITCH: {
+            Aircraft.Engine.Propeller.PITCH: {
                 'val': 0.0,
-                'units': 'ft',
+                'units': 'inch',
             },
+            Aircraft.Engine.NUM_ENGINES: {
+                'val': 1,
+                'units':'unitless',
+            }
         }
 
         return parameters
@@ -85,5 +155,5 @@ class RCBuilder(SubsystemBuilderBase):
         return [
             Dynamic.Vehicle.Propulsion.PROP_POWER + '_out',
             Dynamic.Vehicle.Propulsion.RPM + '_out',
-            Dynamic.Vehicle.Propulsion.PROP_THRUST + '_out',
+            Dynamic.Vehicle.Propulsion.THRUST + '_out',
         ]

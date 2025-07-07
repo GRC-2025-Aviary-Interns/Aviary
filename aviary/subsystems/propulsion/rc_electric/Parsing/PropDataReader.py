@@ -18,8 +18,8 @@ def PropDataReader():
 
     # Opening data files
     # CHANGE THESE TO THE FILE PATH
-    fx = open("Parsing\prop_xt.dat", "r")
-    fy = open("Parsing\prop_yt.dat", "r")
+    fx = open("aviary\subsystems\propulsion\\rc_electric\Parsing\prop_xt.dat", "r")
+    fy = open("aviary\subsystems\propulsion\\rc_electric\Parsing\prop_yt.dat", "r")
 
     # Looping through lines of .dat file
     for xline, yline in zip(fx.readlines(), fy.readlines()):
