@@ -323,6 +323,15 @@ add_meta_data(
 )
 
 add_meta_data(
+    Aircraft.Battery.RESISTANCE,
+    meta_data=_MetaData,
+    historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
+    units='ohm',
+    desc='Total voltage input from the battery pack',
+    default_value=0.0,
+)
+
+add_meta_data(
     Aircraft.Battery.VOLUME,
     meta_data=_MetaData,
     historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
@@ -2573,6 +2582,40 @@ add_meta_data(
     multivalue=True,
 )
 
+add_meta_data(
+    Aircraft.Engine.Motor.IDLE_CURRENT,
+    meta_data=_MetaData,
+    historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
+    units='A',
+    desc='The idle or no-load current from a single motor.',
+)
+
+add_meta_data(
+    Aircraft.Engine.Motor.KV,
+    meta_data=_MetaData,
+    historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
+    units='rpm/V',
+    desc='Speed constant of a single motor.',
+    multivalue=True,
+)
+
+add_meta_data(
+    Aircraft.Engine.Motor.PEAK_CURRENT,
+    meta_data=_MetaData,
+    historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
+    units='A',
+    desc='Maximum instantaneous current that flows through a single motor.',
+)
+
+add_meta_data(
+    Aircraft.Engine.Motor.RESISTANCE,
+    meta_data=_MetaData,
+    historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
+    units='ohm',
+    desc='Resistance from windings of a single motor.',
+)
+
+
 #   ___                            _   _
 #  | _ \  _ _   ___   _ __   ___  | | | |  ___   _ _
 #  |  _/ | '_| / _ \ | '_ \ / -_) | | | | / -_) | '_|
@@ -2646,6 +2689,14 @@ add_meta_data(
     types=int,
     multivalue=True,
     default_value=0,
+)
+
+add_meta_data(
+    Aircraft.Engine.Propeller.PITCH,
+    meta_data=_MetaData,
+    historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
+    units='inch',
+    desc='Forward distance a propeller advances through one revolution.',
 )
 
 add_meta_data(
@@ -6891,6 +6942,16 @@ add_meta_data(
     historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
     units='lbm/h',
     desc='Current total rate of nitrous oxide (NOx) production by the vehicle',
+    multivalue=True,
+)
+
+add_meta_data(
+    Dynamic.Vehicle.Propulsion.PROP_POWER,
+    meta_data=_MetaData,
+    historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
+    units='W',
+    desc='Power output from a propeller',
+    default_value=0.0,
     multivalue=True,
 )
 
