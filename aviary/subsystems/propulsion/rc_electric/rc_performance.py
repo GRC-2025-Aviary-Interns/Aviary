@@ -164,9 +164,6 @@ class Motor(om.ExplicitComponent):
             [
                 'voltage_in', 
                 'current', 
-                Aircraft.Engine.Motor.RESISTANCE, 
-                Aircraft.Engine.Motor.KV, 
-                Aircraft.Engine.Motor.IDLE_CURRENT,
             ],
             rows=ar, cols=ar
         )
@@ -242,10 +239,8 @@ class Propeller(om.ExplicitComponent):
             Dynamic.Vehicle.Propulsion.THRUST,
             [
                 Dynamic.Atmosphere.DENSITY, 
-                Aircraft.Engine.Propeller.DIAMETER,
                 Dynamic.Vehicle.Propulsion.RPM,
                 'ct',
-                Aircraft.Engine.NUM_ENGINES,
             ],
             rows=ar, cols=ar,
         )
@@ -254,7 +249,6 @@ class Propeller(om.ExplicitComponent):
             Dynamic.Vehicle.Propulsion.PROP_POWER,
             [
                 Dynamic.Atmosphere.DENSITY, 
-                Aircraft.Engine.Propeller.DIAMETER,
                 Dynamic.Vehicle.Propulsion.RPM,
                 'cp',
             ],
@@ -340,7 +334,7 @@ class RCPropGroup(om.Group):
                 Aircraft.Engine.Motor.MASS
                 ],
             promotes_outputs=[Dynamic.Vehicle.Propulsion.RPM])
-        prop_coef = om.MetaModelUnStructuredComp(vec_size = nn, default_surrogate = om.KrigingSurrogate(eval_rmse=True, training_cache='rc_surrogate'))
+        prop_coef = om.MetaModelUnStructuredComp(vec_size = 1, default_surrogate = om.KrigingSurrogate(eval_rmse=True, training_cache='rc_surrogate'))
         #TODO: check promotions
         self.add_subsystem(
             'propco', 
