@@ -2697,6 +2697,7 @@ add_meta_data(
     historical_name={'GASP': None, 'FLOPS': None, 'LEAPS1': None},
     units='inch',
     desc='Forward distance a propeller advances through one revolution.',
+    multivalue=True #TODO May switch back
 )
 
 add_meta_data(

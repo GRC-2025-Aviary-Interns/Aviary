@@ -102,7 +102,7 @@ esc_power = prob.get_val('esc.power', units='W')
 motor_power = prob.get_val('motor.power', units='W')
 prop_power = prob.get_val(Dynamic.Vehicle.Propulsion.PROP_POWER, units='W')
 power_residual = battery_power + esc_power + motor_power - prop_power
-assert_near_equal(power_residual, 0, tolerance=tol)
+assert_near_equal(power_residual, np.zeros(3), tolerance=tol)
 partial_data = prob.check_partials(
     out_stream=None,
     compact_print=True,

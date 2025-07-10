@@ -192,7 +192,7 @@ class Motor(om.ExplicitComponent):
 
         outputs[Dynamic.Vehicle.Propulsion.RPM] = kv * voltage_prop
         outputs['power'] = -inputs['current']**2 * R - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * voltage_prop
-        outputs["current_con"] = inputs["current"] - inputs[Aircraft.Engine.Motor.PEAK_CURRENT] #TODO verify this is best way to do
+        outputs["current_con"] = inputs["current"] - inputs[Aircraft.Engine.Motor.PEAK_CURRENT] #TODO: Verify this is the best way to do
 
     def compute_partials(self, inputs, partials):
         R = inputs[Aircraft.Engine.Motor.RESISTANCE]
@@ -217,6 +217,29 @@ class Motor(om.ExplicitComponent):
         partials['current_con', Aircraft.Engine.Motor.PEAK_CURRENT] = -1
         partials['current_con', 'current'] = 1
 
+#TODO: reading in of data should be changed later:
+from aviary.subsystems.propulsion.rc_electric.Parsing.PropDataReader import PropDataReader
+xt, ct, cp = PropDataReader()
+order = np.lexsort((xt[:,3], xt[:,2], xt[:,1], xt[:,0]))
+xt = xt[order]
+
+class PropCoefficients(om.MetaModelSemiStructuredComp):
+    def initialize(self):
+        self.options.declare('method', default='lagrange2', types=str)
+        self.options.declare('extrapolate', default=True, types=bool)
+        self.options.declare('training_data_gradients', default=True, types=bool)
+        self.options.declare('vec_size', default=1, types=int)
+
+    def setup(self):
+        nn = self.options['vec_size']
+        self.add_input('diameter', val=np.ones(nn) * self.get_val(Aircraft.Engine.Propeller.DIAMETER, units='m'), training_data = xt[:, 0], units="m", desc="propeller diameter")
+        self.add_input(Aircraft.Engine.Propeller.PITCH, val=np.zeros(nn), training_data = xt[:, 1], units="inch", desc="propeller pitch")
+        self.add_input(Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), training_data = xt[:, 2], units='rev/s')
+        self.add_input(Dynamic.Mission.VELOCITY, val=np.zeros(nn), training_data = xt[:, 3], units='m/s')
+
+        self.add_output('ct', training_data = ct[order], units='unitless')
+        self.add_output('cp', training_data = cp[order], units='unitless')
+        
 
 class Propeller(om.ExplicitComponent):
     def initialize(self):
@@ -225,7 +248,7 @@ class Propeller(om.ExplicitComponent):
     def setup(self): 
         nn = self.options['num_nodes']
         add_aviary_input(self, Dynamic.Atmosphere.DENSITY, val=np.zeros(nn), units = 'kg/m**3')
-        add_aviary_input(self, Aircraft.Engine.Propeller.DIAMETER, val=0.0, units = 'm')
+        add_aviary_input(self, Aircraft.Engine.Propeller.DIAMETER, val=np.zeros(nn), units = 'm')
         add_aviary_input(self, Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), units = 'rev/s')
         self.add_input("ct", val=np.zeros(nn), units='unitless')
         self.add_input("cp", val=np.zeros(nn), units='unitless')
@@ -235,38 +258,39 @@ class Propeller(om.ExplicitComponent):
         add_aviary_output(self, Dynamic.Vehicle.Propulsion.PROP_POWER, val=np.zeros(nn), units='W')
         ar =np.arange(nn)
 
-        self.declare_partials(
-            Dynamic.Vehicle.Propulsion.THRUST,
-            [
-                Dynamic.Atmosphere.DENSITY, 
-                Dynamic.Vehicle.Propulsion.RPM,
-                'ct',
-            ],
-            rows=ar, cols=ar,
-        )
+        self.declare_partials('*', '*', method='cs')
+        # self.declare_partials(
+        #     Dynamic.Vehicle.Propulsion.THRUST,
+        #     [
+        #         Dynamic.Atmosphere.DENSITY, 
+        #         Dynamic.Vehicle.Propulsion.RPM,
+        #         'ct',
+        #     ],
+        #     rows=ar, cols=ar,
+        # )
 
-        self.declare_partials(
-            Dynamic.Vehicle.Propulsion.PROP_POWER,
-            [
-                Dynamic.Atmosphere.DENSITY, 
-                Dynamic.Vehicle.Propulsion.RPM,
-                'cp',
-            ],
-            rows=ar, cols=ar
-        )
+        # self.declare_partials(
+        #     Dynamic.Vehicle.Propulsion.PROP_POWER,
+        #     [
+        #         Dynamic.Atmosphere.DENSITY, 
+        #         Dynamic.Vehicle.Propulsion.RPM,
+        #         'cp',
+        #     ],
+        #     rows=ar, cols=ar
+        # )
 
-        self.declare_partials(
-            Dynamic.Vehicle.Propulsion.THRUST,
-            [
-                Aircraft.Engine.Propeller.DIAMETER,
-                Aircraft.Engine.NUM_ENGINES,
-            ],
-        )
+        # self.declare_partials(
+        #     Dynamic.Vehicle.Propulsion.THRUST,
+        #     [
+        #         Aircraft.Engine.Propeller.DIAMETER,
+        #         Aircraft.Engine.NUM_ENGINES,
+        #     ],
+        # )
 
-        self.declare_partials(
-            Dynamic.Vehicle.Propulsion.PROP_POWER,
-            Aircraft.Engine.Propeller.DIAMETER,
-        )
+        # self.declare_partials(
+        #     Dynamic.Vehicle.Propulsion.PROP_POWER,
+        #     Aircraft.Engine.Propeller.DIAMETER,
+        # )
 
     def compute(self, inputs, outputs):
         rho = inputs[Dynamic.Atmosphere.DENSITY]
@@ -276,21 +300,21 @@ class Propeller(om.ExplicitComponent):
         outputs[Dynamic.Vehicle.Propulsion.THRUST] = (rho * n**2 * D**4 * inputs["ct"] * inputs[Aircraft.Engine.NUM_ENGINES])
         outputs[Dynamic.Vehicle.Propulsion.PROP_POWER] = (rho * n**3 * D**5 * inputs["cp"])
 
-    def compute_partials(self, inputs, partials):
-        rho = inputs[Dynamic.Atmosphere.DENSITY]
-        D = inputs[Aircraft.Engine.Propeller.DIAMETER]
-        n = inputs [Dynamic.Vehicle.Propulsion.RPM]
+    # def compute_partials(self, inputs, partials):
+    #     rho = inputs[Dynamic.Atmosphere.DENSITY]
+    #     D = inputs[Aircraft.Engine.Propeller.DIAMETER]
+    #     n = inputs [Dynamic.Vehicle.Propulsion.RPM]
 
-        partials[Dynamic.Vehicle.Propulsion.THRUST, Dynamic.Atmosphere.DENSITY] = n**2 * D**4 * inputs["ct"] * inputs[Aircraft.Engine.NUM_ENGINES]
-        partials[Dynamic.Vehicle.Propulsion.THRUST, Aircraft.Engine.Propeller.DIAMETER] = rho * n**2 * 4 * D**3 * inputs["ct"] * inputs[Aircraft.Engine.NUM_ENGINES]
-        partials[Dynamic.Vehicle.Propulsion.THRUST, Dynamic.Vehicle.Propulsion.RPM] = rho * 2 * n * D**4 * inputs["ct"] * inputs[Aircraft.Engine.NUM_ENGINES]
-        partials[Dynamic.Vehicle.Propulsion.THRUST, 'ct'] = rho * n**2 * D**4 * inputs[Aircraft.Engine.NUM_ENGINES]
-        partials[Dynamic.Vehicle.Propulsion.THRUST, Aircraft.Engine.NUM_ENGINES] = rho * n**2 * D**4 * inputs["ct"]
+    #     partials[Dynamic.Vehicle.Propulsion.THRUST, Dynamic.Atmosphere.DENSITY] = n**2 * D**4 * inputs["ct"] * inputs[Aircraft.Engine.NUM_ENGINES]
+    #     partials[Dynamic.Vehicle.Propulsion.THRUST, Aircraft.Engine.Propeller.DIAMETER] = rho * n**2 * 4 * D**3 * inputs["ct"] * inputs[Aircraft.Engine.NUM_ENGINES]
+    #     partials[Dynamic.Vehicle.Propulsion.THRUST, Dynamic.Vehicle.Propulsion.RPM] = rho * 2 * n * D**4 * inputs["ct"] * inputs[Aircraft.Engine.NUM_ENGINES]
+    #     partials[Dynamic.Vehicle.Propulsion.THRUST, 'ct'] = rho * n**2 * D**4 * inputs[Aircraft.Engine.NUM_ENGINES]
+    #     partials[Dynamic.Vehicle.Propulsion.THRUST, Aircraft.Engine.NUM_ENGINES] = rho * n**2 * D**4 * inputs["ct"]
 
-        partials[Dynamic.Vehicle.Propulsion.PROP_POWER, Dynamic.Atmosphere.DENSITY] = n**3 * D**5 * inputs["cp"]
-        partials[Dynamic.Vehicle.Propulsion.PROP_POWER, Aircraft.Engine.Propeller.DIAMETER] = rho * n**3 * 5 * D**4 * inputs["cp"]
-        partials[Dynamic.Vehicle.Propulsion.PROP_POWER, Dynamic.Vehicle.Propulsion.RPM] = rho * 3 * n**2 * D**5 * inputs["cp"]
-        partials[Dynamic.Vehicle.Propulsion.PROP_POWER, 'cp'] = rho * n**3 * D**5 
+    #     partials[Dynamic.Vehicle.Propulsion.PROP_POWER, Dynamic.Atmosphere.DENSITY] = n**3 * D**5 * inputs["cp"]
+    #     partials[Dynamic.Vehicle.Propulsion.PROP_POWER, Aircraft.Engine.Propeller.DIAMETER] = rho * n**3 * 5 * D**4 * inputs["cp"]
+    #     partials[Dynamic.Vehicle.Propulsion.PROP_POWER, Dynamic.Vehicle.Propulsion.RPM] = rho * 3 * n**2 * D**5 * inputs["cp"]
+    #     partials[Dynamic.Vehicle.Propulsion.PROP_POWER, 'cp'] = rho * n**3 * D**5 
 
 
 class PowerResiduals(om.ImplicitComponent):
@@ -313,19 +337,28 @@ class PowerResiduals(om.ImplicitComponent):
     def apply_nonlinear(self, inputs, outputs, residuals):
         residuals['current'] = inputs['power_batt'] + inputs['power_esc'] + inputs['power_motor'] - inputs[Dynamic.Vehicle.Propulsion.PROP_POWER]
 
-#TODO: reading in of data should be changed later:
-from aviary.subsystems.propulsion.rc_electric.Parsing.PropDataReader import PropDataReader
-from aviary.subsystems.propulsion.rc_electric.Parsing.LHS_cosine_Datasampler import SampleDataLHScosine
-x, ct, cp = PropDataReader()
-x, ct, cp, _, _, _ = SampleDataLHScosine(x, ct, cp)
 class RCPropGroup(om.Group):
     def initialize(self):
         self.options.declare('num_nodes', default=1, types=int)
     def setup(self):
         nn = self.options['num_nodes']
-        self.add_subsystem('battery', Battery(), promotes_inputs=[Aircraft.Battery.VOLTAGE, Aircraft.Battery.MASS, Aircraft.Battery.RESISTANCE])
-        self.add_subsystem('esc', ElectronicSpeedController(), promotes_inputs=[Dynamic.Vehicle.Propulsion.THROTTLE])
-        self.add_subsystem('motor', Motor(), 
+        self.add_subsystem(
+            'battery', 
+            Battery(num_nodes=nn), 
+            promotes_inputs=[
+                Aircraft.Battery.VOLTAGE, 
+                Aircraft.Battery.MASS, 
+                Aircraft.Battery.RESISTANCE
+            ]
+        )
+        self.add_subsystem(
+            'esc', 
+            ElectronicSpeedController(num_nodes=nn), 
+            promotes_inputs=[
+                Dynamic.Vehicle.Propulsion.THROTTLE
+            ]
+        )
+        self.add_subsystem('motor', Motor(num_nodes=nn), 
             promotes_inputs=[
                 Aircraft.Engine.Motor.IDLE_CURRENT, 
                 Aircraft.Engine.Motor.PEAK_CURRENT,
@@ -333,12 +366,13 @@ class RCPropGroup(om.Group):
                 Aircraft.Engine.Motor.KV,
                 Aircraft.Engine.Motor.MASS
                 ],
-            promotes_outputs=[Dynamic.Vehicle.Propulsion.RPM])
-        prop_coef = om.MetaModelUnStructuredComp(vec_size = 1, default_surrogate = om.KrigingSurrogate(eval_rmse=True, training_cache='rc_surrogate'))
-        #TODO: check promotions
+            promotes_outputs=[
+                Dynamic.Vehicle.Propulsion.RPM
+                ]
+        )
         self.add_subsystem(
             'propco', 
-            prop_coef, 
+            PropCoefficients(method='lagrange2', extrapolate=True, training_data_gradients=True, vec_size=nn), 
             promotes_inputs=[
                 Dynamic.Vehicle.Propulsion.RPM, 
                 Dynamic.Mission.VELOCITY, 
@@ -347,21 +381,29 @@ class RCPropGroup(om.Group):
             ],
             promotes_outputs=['ct', 'cp']
         )
-        prop_coef.add_input(Aircraft.Engine.Propeller.DIAMETER, val=0.0, training_data=x[:, 0], units = 'm') #TODO this may break
-        prop_coef.add_input(Aircraft.Engine.Propeller.PITCH, val=0.0, training_data=x[:, 1], units='inch')
-        prop_coef.add_input(Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), training_data=x[:, 2], units = 'rev/s') 
-        prop_coef.add_input(Dynamic.Mission.VELOCITY, val=np.zeros(nn), training_data = x[:,3], units='m/s')
-
-        prop_coef.add_output('ct', val=np.zeros(nn), training_data = ct, units='unitless', surrogate = om.KrigingSurrogate(eval_rmse = True, lapack_driver='gesdd', training_cache = 'thrust_surrogate'))
-        prop_coef.add_output('cp', val=np.zeros(nn), training_data = cp, units='unitless', surrogate = om.KrigingSurrogate(eval_rmse = True, lapack_driver='gesdd', training_cache = 'power_surrogate'))
-
         self.add_subsystem(
             'prop', 
-            Propeller(), 
-            promotes_inputs=[Aircraft.Engine.Propeller.DIAMETER, Dynamic.Vehicle.Propulsion.RPM, 'ct', 'cp', Aircraft.Engine.NUM_ENGINES, Dynamic.Atmosphere.DENSITY],
-            promotes_outputs=[Dynamic.Vehicle.Propulsion.PROP_POWER, Dynamic.Vehicle.Propulsion.THRUST]
+            Propeller(num_nodes=nn), 
+            promotes_inputs=[
+                Aircraft.Engine.Propeller.DIAMETER, 
+                Dynamic.Vehicle.Propulsion.RPM, 
+                'ct', 
+                'cp', 
+                Aircraft.Engine.NUM_ENGINES, 
+                Dynamic.Atmosphere.DENSITY
+                ],
+            promotes_outputs=[
+                Dynamic.Vehicle.Propulsion.PROP_POWER, 
+                Dynamic.Vehicle.Propulsion.THRUST
+                ]
         )
-        self.add_subsystem('power_net', PowerResiduals(), promotes_inputs=[Dynamic.Vehicle.Propulsion.PROP_POWER])
+        self.add_subsystem(
+            'power_net', 
+            PowerResiduals(num_nodes=nn), 
+            promotes_inputs=[
+                Dynamic.Vehicle.Propulsion.PROP_POWER
+                ]
+            )
 
         self.connect('battery.voltage_out', 'esc.voltage_in')
         self.connect('esc.voltage_out', 'motor.voltage_in')

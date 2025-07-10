@@ -35,8 +35,8 @@ def PropDataReader():
         # Restricting data to reasonable bounds
         if (
             xlineArr[3] < 50  # V < 50 m/s
-            and xlineArr[0] / in2m < 23  # D < 23 in
-            and xlineArr[0] / in2m > 12  # D > 14
+            and xlineArr[0] / in2m < 20  # D < 20 in
+            and xlineArr[0] / in2m > 12  # D > 12
             and xlineArr[2] / rpm2rps
             < 150000 / (xlineArr[0] / in2m)  # RPM limits suggested by APC
         ):
