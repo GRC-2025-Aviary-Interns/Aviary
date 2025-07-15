@@ -148,7 +148,7 @@ class RCBuilder(SubsystemBuilderBase):
         return parameters
 
     def get_mass_names(self):
-        return [Aircraft.Engine.Motor.MASS]
+        return [Aircraft.Battery.MASS, Aircraft.Engine.Motor.MASS]
     
     #TODO add new outputs
     def get_outputs(self):
