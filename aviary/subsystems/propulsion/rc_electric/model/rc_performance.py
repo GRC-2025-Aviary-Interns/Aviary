@@ -14,14 +14,12 @@ class Battery(om.ExplicitComponent):
 
         #TODO: add Battery options
         add_aviary_input(self, Aircraft.Battery.VOLTAGE, val=0.0, units = "V")
-        add_aviary_input(self, Aircraft.Battery.MASS, val=0.0, units='kg')
+        # add_aviary_input(self, Aircraft.Battery.MASS, val=0.0, units='kg')
         add_aviary_input(self, Aircraft.Battery.RESISTANCE, val=0.0, units='ohm')
         self.add_input('current', val=np.zeros(nn), units='A')
 
         self.add_output('voltage_out', val=np.zeros(nn), units='V')
         self.add_output('power', val=np.zeros(nn), units='W')
-        self.add_output('nominal_capacity', val=0.0, units='A*h')
-        self.add_output('energy', val=0.0, units='W*h', desc='For an individual battery')
         ar = np.arange(nn)
 
         self.declare_partials(
@@ -34,28 +32,12 @@ class Battery(om.ExplicitComponent):
             ['current'],
             rows=ar, cols=ar
         )
-        #TODO: check if arange is necessary
-
-        self.declare_partials(
-            'nominal_capacity',
-            Aircraft.Battery.MASS,
-        )
-
-        self.declare_partials(
-            'energy',
-            [
-                Aircraft.Battery.MASS,
-                Aircraft.Battery.VOLTAGE,
-            ],
-        )
 
     def compute(self, inputs, outputs):
         V = inputs[Aircraft.Battery.VOLTAGE]
         I = inputs['current']
         R = inputs[Aircraft.Battery.RESISTANCE]
 
-        outputs['nominal_capacity'] = inputs[Aircraft.Battery.MASS] * 7.3 - 0.246 # Per Peter Sharpe TODO VERIFY
-        outputs['energy'] = V * outputs['nominal_capacity']
         outputs['power'] = V * I - I**2 * R
         outputs['voltage_out'] = V - I * R
 
@@ -63,7 +45,6 @@ class Battery(om.ExplicitComponent):
         V = inputs[Aircraft.Battery.VOLTAGE]
         I = inputs['current']
         R = inputs[Aircraft.Battery.RESISTANCE]
-        nominal_capacity = inputs[Aircraft.Battery.MASS] * 7.3 - 0.246
 
         partials['voltage_out', Aircraft.Battery.VOLTAGE] = 1
         partials['voltage_out', 'current'] = -R
@@ -72,11 +53,6 @@ class Battery(om.ExplicitComponent):
         partials['power', Aircraft.Battery.VOLTAGE] = I
         partials['power', 'current'] = V - 2 * I * R
         partials['power', Aircraft.Battery.RESISTANCE] = -I**2
-
-        partials['nominal_capacity', Aircraft.Battery.MASS] = 7.3
-
-        partials['energy', Aircraft.Battery.VOLTAGE] = nominal_capacity
-        partials['energy', Aircraft.Battery.MASS] = V * 7.3
 
 
 class ElectronicSpeedController(om.ExplicitComponent):
@@ -118,9 +94,9 @@ class ElectronicSpeedController(om.ExplicitComponent):
 
     def compute_partials(self, inputs, partials):
 
-        a = self.options['a']
-        b = self.options['b']
-        c = self.options['c']
+        a = self.options['n']
+        b = self.options['o']
+        c = self.options['p']
         t = inputs[Dynamic.Vehicle.Propulsion.THROTTLE]
         efficiency = a * (1 - 1 / (1 + b*t**c))
         partials['efficiency', Dynamic.Vehicle.Propulsion.THROTTLE] = a*b*c*t**(c - 1) / (b*t**c + 1)**2
@@ -140,20 +116,17 @@ class Motor(om.ExplicitComponent):
     def initialize(self):
         self.options.declare('num_nodes', default=1, types=int)
 
-        self.options.declare('m', default = 1.3132, desc='m coefficient for kv(mass, peak_current): kv = m * peak_current/mass + b')
-        self.options.declare('b', default = 0.01, desc='b coefficient for kv(mass, peak_current): kv = m * peak_current/mass + b')
-
     def setup(self):
         nn = self.options['num_nodes']
 
         add_aviary_input(self, Aircraft.Engine.Motor.IDLE_CURRENT, val=0.0, units='A')
         add_aviary_input(self, Aircraft.Engine.Motor.PEAK_CURRENT, val=0.0, units='A')
         add_aviary_input(self, Aircraft.Engine.Motor.RESISTANCE, val=0.0, units='ohm')
+        add_aviary_input(self, Aircraft.Engine.Motor.KV, val=0.0, units='rpm/V')
         add_aviary_input(self, Aircraft.Engine.Motor.MASS, val=0.0, units ='kg')
         self.add_input('voltage_in', val=np.zeros(nn), units = 'V')
         self.add_input('current', val=np.zeros(nn), units = 'A')
 
-        add_aviary_output(self, Aircraft.Engine.Motor.KV, val=0.0, units='rpm/V')
         add_aviary_output(self, Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), units='rpm')
         self.add_output('power', val=np.zeros(nn), units='W')
         self.add_output('current_con', val=np.zeros(nn), units="A")
@@ -193,39 +166,27 @@ class Motor(om.ExplicitComponent):
         )
 
     def compute(self, inputs, outputs):
-        #TODO: Add computation for no given kv, optimizing the motor, 
-        # TODO: DO THIS TOMORROW, add derivatives (ESPECIALLY FOR IDLE CURRENT AFTER RESISTANCE CHANGES!), test same stuff, make the builder for pre and mission. 
-        m = self.options['m']
-        b = self.options['b'] #TODO: CITE
-
-        
-        R = 0.0467 * inputs[Aircraft.Engine.Motor.IDLE_CURRENT] ** -1.892 #TODO: CITE
-        outputs[Aircraft.Engine.Motor.KV] = m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / inputs[Aircraft.Engine.Motor.MASS] + b
+        #TODO: Add computation for no given kv, optimizing the motor
+        R = inputs[Aircraft.Engine.Motor.RESISTANCE]
+        kv = inputs[Aircraft.Engine.Motor.KV]
         voltage_prop = inputs['voltage_in'] - inputs['current'] * R
-        
-        outputs[Dynamic.Vehicle.Propulsion.RPM] = outputs[Aircraft.Engine.Motor.KV] * voltage_prop
+
+        outputs[Dynamic.Vehicle.Propulsion.RPM] = kv * voltage_prop
         outputs['power'] = -inputs['current']**2 * R - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * voltage_prop
         outputs["current_con"] = inputs["current"] - inputs[Aircraft.Engine.Motor.PEAK_CURRENT] #TODO: Verify this is the best way to do
 
     def compute_partials(self, inputs, partials):
-        m = self.options['m']
-        b = self.options['b']
-
-        R =  0.0467 * inputs[Aircraft.Engine.Motor.IDLE_CURRENT] ** -1.892
+        R = inputs[Aircraft.Engine.Motor.RESISTANCE]
+        
         voltage_prop = inputs['voltage_in'] - inputs['current'] * R
         dvoltage_prop_dvoltage_in = 1
         dvoltage_prop_dcurrent = -R
         dvoltage_prop_dresistance = -inputs['current']
-        kv = m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / inputs[Aircraft.Engine.Motor.MASS] + b
 
-        partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.PEAK_CURRENT] = m / inputs[Aircraft.Engine.Motor.MASS] 
-        partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.MASS] = -m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / (inputs[Aircraft.Engine.Motor.MASS]**2)
-
-        partials[Dynamic.Vehicle.Propulsion.RPM, 'voltage_in'] = kv * dvoltage_prop_dvoltage_in
-        partials[Dynamic.Vehicle.Propulsion.RPM, 'current'] = kv * dvoltage_prop_dcurrent
-        partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.RESISTANCE] = kv * dvoltage_prop_dresistance
-        partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.PEAK_CURRENT] = partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.PEAK_CURRENT] * voltage_prop
-        partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.IDLE_CURRENT] = partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.IDLE_CURRENT] * voltage_prop
+        partials[Dynamic.Vehicle.Propulsion.RPM, 'voltage_in'] = inputs[Aircraft.Engine.Motor.KV] * dvoltage_prop_dvoltage_in
+        partials[Dynamic.Vehicle.Propulsion.RPM, 'current'] = inputs[Aircraft.Engine.Motor.KV] * dvoltage_prop_dcurrent
+        partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.RESISTANCE] = inputs[Aircraft.Engine.Motor.KV] * dvoltage_prop_dresistance
+        partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.KV] = voltage_prop
 
         partials['power', 'voltage_in'] = -inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * dvoltage_prop_dvoltage_in
         partials['power', 'current'] = -2 * inputs['current'] * R - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * dvoltage_prop_dcurrent
@@ -234,6 +195,113 @@ class Motor(om.ExplicitComponent):
         
         partials['current_con', Aircraft.Engine.Motor.PEAK_CURRENT] = -1
         partials['current_con', 'current'] = 1
+
+# class Motor(om.ExplicitComponent):
+#     def initialize(self):
+#         self.options.declare('num_nodes', default=1, types=int)
+#     def setup(self):
+#         nn = self.options['num_nodes']
+
+#         add_aviary_input(self, Aircraft.Engine.Motor.IDLE_CURRENT, val=0.0, units='A')
+#         add_aviary_input(self, Aircraft.Engine.Motor.PEAK_CURRENT, val=0.0, units='A')
+#         add_aviary_input(self, Aircraft.Engine.Motor.RESISTANCE, val=0.0, units='ohm')
+#         add_aviary_input(self, Aircraft.Engine.Motor.KV, val=0.0, units = 'rpm/ V')
+#         add_aviary_input(self, Aircraft.Engine.Motor.MASS, val=0.0, units ='kg')
+#         self.add_input('voltage_in', val=np.zeros(nn), units = 'V')
+#         self.add_input('current', val=np.zeros(nn), units = 'A')
+
+#         add_aviary_output(self, Aircraft.Engine.Motor.KV, val=0.0, units='rpm/V')
+#         add_aviary_output(self, Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), units='rpm')
+#         self.add_output('power', val=np.zeros(nn), units='W')
+#         self.add_output('current_con', val=np.zeros(nn), units="A")
+#         ar=np.arange(nn)
+
+#         self.declare_partials(
+#             [
+#                 Dynamic.Vehicle.Propulsion.RPM, 
+#                 'power'
+#             ], 
+#             [
+#                 'voltage_in', 
+#                 'current', 
+#             ],
+#             rows=ar, cols=ar
+#         )
+
+#         self.declare_partials(
+#             [Dynamic.Vehicle.Propulsion.RPM,], 
+#             [
+#                 Aircraft.Engine.Motor.IDLE_CURRENT, 
+#                 Aircraft.Engine.Motor.PEAK_CURRENT, 
+#                 Aircraft.Engine.Motor.MASS
+#             ],
+#         )
+
+#         self.declare_partials(
+#             [Aircraft.Engine.Motor.KV],
+#             [
+#                 Aircraft.Engine.Motor.PEAK_CURRENT, 
+#                 Aircraft.Engine.Motor.MASS,
+#             ],
+#         )
+#         self.declare_partials(
+#             ['power'], 
+#             [Aircraft.Engine.Motor.IDLE_CURRENT]
+#         )
+
+#         self.declare_partials(
+#             'current_con',
+#             'current',
+#             rows=ar, cols=ar
+#         )
+
+#         self.declare_partials(
+#             'current_con', 
+#             Aircraft.Engine.Motor.PEAK_CURRENT,
+#         )
+
+#     def compute(self, inputs, outputs):
+#         # TODO: DO THIS TOMORROW, add derivatives (ESPECIALLY FOR IDLE CURRENT AFTER RESISTANCE CHANGES!), test same stuff, make the builder for pre and mission. 
+#         m = self.options['m']
+#         b = self.options['b'] #TODO: CITE
+
+        
+#         R = 0.0467 * inputs[Aircraft.Engine.Motor.IDLE_CURRENT] ** -1.892 #TODO: CITE
+#         outputs[Aircraft.Engine.Motor.KV] = m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / inputs[Aircraft.Engine.Motor.MASS] + b
+#         voltage_prop = inputs['voltage_in'] - inputs['current'] * R
+        
+#         outputs[Dynamic.Vehicle.Propulsion.RPM] = outputs[Aircraft.Engine.Motor.KV] * voltage_prop
+#         outputs['power'] = -inputs['current']**2 * R - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * voltage_prop
+#         outputs["current_con"] = inputs["current"] - inputs[Aircraft.Engine.Motor.PEAK_CURRENT] #TODO: Verify this is the best way to do
+
+#     def compute_partials(self, inputs, partials):
+#         m = self.options['m']
+#         b = self.options['b']
+
+#         R =  0.0467 * inputs[Aircraft.Engine.Motor.IDLE_CURRENT] ** -1.892
+#         voltage_prop = inputs['voltage_in'] - inputs['current'] * R
+#         dvoltage_prop_dvoltage_in = 1
+#         dvoltage_prop_dcurrent = -R
+#         dresistance_didle_current = -0.0883564 / inputs[Aircraft.Engine.Motor.IDLE_CURRENT]**2.892
+#         dvoltage_prop_didle_current = inputs['current'] * 0.0883564 / inputs[Aircraft.Engine.Motor.IDLE_CURRENT]**2.892
+#         kv = m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / inputs[Aircraft.Engine.Motor.MASS] + b
+
+#         partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.PEAK_CURRENT] = m / inputs[Aircraft.Engine.Motor.MASS] 
+#         partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.MASS] = -m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / (inputs[Aircraft.Engine.Motor.MASS]**2)
+
+#         partials[Dynamic.Vehicle.Propulsion.RPM, 'voltage_in'] = kv * dvoltage_prop_dvoltage_in
+#         partials[Dynamic.Vehicle.Propulsion.RPM, 'current'] = kv * dvoltage_prop_dcurrent
+#         partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.PEAK_CURRENT] = partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.PEAK_CURRENT] * voltage_prop
+#         partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.MASS] = partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.MASS] * voltage_prop
+#         partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.IDLE_CURRENT] = kv * dvoltage_prop_didle_current
+
+#         partials['power', 'voltage_in'] = -inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * dvoltage_prop_dvoltage_in
+#         partials['power', 'current'] = -2 * inputs['current'] * R - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * dvoltage_prop_dcurrent
+#         partials['power', Aircraft.Engine.Motor.IDLE_CURRENT] = (-inputs['current']**2 * dresistance_didle_current) - voltage_prop - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * dvoltage_prop_didle_current 
+#         # partials['power', Aircraft.Engine.Motor.IDLE_CURRENT] = -voltage_prop * dvoltage_prop_didle_current
+        
+#         partials['current_con', Aircraft.Engine.Motor.PEAK_CURRENT] = -1
+#         partials['current_con', 'current'] = 1
 
 #TODO: reading in of data should be changed later:
 from aviary.subsystems.propulsion.rc_electric.Parsing.PropDataReader import PropDataReader
@@ -400,12 +468,11 @@ class RCPropGroup(om.Group):
             promotes_inputs=[
                 Aircraft.Engine.Motor.IDLE_CURRENT, 
                 Aircraft.Engine.Motor.PEAK_CURRENT,
-                Aircraft.Engine.Motor.RESISTANCE, 
-                Aircraft.Engine.Motor.KV,
                 Aircraft.Engine.Motor.MASS
                 ],
             promotes_outputs=[
-                Dynamic.Vehicle.Propulsion.RPM
+                Dynamic.Vehicle.Propulsion.RPM,
+                Aircraft.Engine.Motor.KV,
                 ]
         )
         self.add_subsystem('vectorize_geo', Vectorization(num_nodes=nn), 

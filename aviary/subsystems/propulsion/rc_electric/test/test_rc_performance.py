@@ -5,7 +5,7 @@ import openmdao.api as om
 from openmdao.utils.assert_utils import assert_check_partials, assert_near_equal
 
 from aviary.subsystems.atmosphere.atmosphere import Atmosphere
-from aviary.subsystems.propulsion.rc_electric.rc_performance import RCPropGroup, Vectorization, PropCoefficients
+from aviary.subsystems.propulsion.rc_electric.model.rc_performance import RCPropGroup, Vectorization, PropCoefficients
 from aviary.variable_info.functions import setup_model_options
 from aviary.variable_info.options import get_option_defaults
 from aviary.variable_info.variables import Aircraft, Dynamic, Settings
@@ -37,8 +37,8 @@ class RCPerformanceTest(unittest.TestCase):
         prob.set_val(Dynamic.Vehicle.Propulsion.THROTTLE, 0.8, units='unitless')
         prob.set_val(Aircraft.Engine.Motor.IDLE_CURRENT, 0.91, units='A')
         prob.set_val(Aircraft.Engine.Motor.PEAK_CURRENT, 120, units='A')
-        prob.set_val(Aircraft.Engine.Motor.RESISTANCE, 0.032, units='ohm')
-        prob.set_val(Aircraft.Engine.Motor.KV, 420, units='rpm/V')
+        # prob.set_val(Aircraft.Engine.Motor.RESISTANCE, 0.032, units='ohm')
+        # prob.set_val(Aircraft.Engine.Motor.KV, 420, units='rpm/V')
         prob.set_val(Aircraft.Engine.Motor.MASS, 0.288, units='kg')
         prob.set_val(Dynamic.Atmosphere.DENSITY, 1.225, units='kg/m**3')
         prob.set_val(Aircraft.Engine.Propeller.DIAMETER, 20, units='inch')
@@ -87,8 +87,8 @@ class RCPerformanceTest(unittest.TestCase):
         prob.set_val(Dynamic.Vehicle.Propulsion.THROTTLE, 0.8, units='unitless')
         prob.set_val(Aircraft.Engine.Motor.IDLE_CURRENT, 0.91, units='A')
         prob.set_val(Aircraft.Engine.Motor.PEAK_CURRENT, 120, units='A')
-        prob.set_val(Aircraft.Engine.Motor.RESISTANCE, 0.032, units='ohm')
-        prob.set_val(Aircraft.Engine.Motor.KV, 420, units='rpm/V')
+        # prob.set_val(Aircraft.Engine.Motor.RESISTANCE, 0.032, units='ohm')
+        # prob.set_val(Aircraft.Engine.Motor.KV, 420, units='rpm/V')
         prob.set_val(Aircraft.Engine.Motor.MASS, 0.288, units='kg')
         prob.set_val(Dynamic.Atmosphere.DENSITY, 1.225, units='kg/m**3')
         prob.set_val(Aircraft.Engine.Propeller.DIAMETER, 20, units='inch')

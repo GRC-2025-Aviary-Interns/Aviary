@@ -1,4 +1,6 @@
-from aviary.subsystems.propulsion.rc_electric.rc_performance import RCPropGroup
+from aviary.subsystems.propulsion.rc_electric.model.rcpropulsion_premission import RCPropPreMission
+from aviary.subsystems.propulsion.rc_electric.model.rcpropulsion_mission import RCPropMission
+
 from aviary.subsystems.subsystem_builder_base import SubsystemBuilderBase
 from aviary.variable_info.variables import Aircraft, Dynamic, Mission
 
@@ -7,13 +9,13 @@ class RCBuilder(SubsystemBuilderBase):
         """Initializes the PropellerBuilder object with a given name."""
         super().__init__(name)
 
-    def build_pre_mission(self, aviary_inputs):
+    def build_pre_mission(self, m, b, aviary_inputs):
         """Builds an OpenMDAO system for the pre-mission computations of the subsystem."""
-        return
+        return RCPropPreMission(m=m, b=b, aviary_options=aviary_inputs)
 
     def build_mission(self, num_nodes, aviary_inputs):
         """Builds an OpenMDAO system for the mission computations of the subsystem."""
-        return RCPropGroup(num_nodes=num_nodes, aviary_options=aviary_inputs)
+        return RCPropMission(num_nodes=num_nodes, aviary_options=aviary_inputs)
 
     def get_design_vars(self):
         """
@@ -29,8 +31,7 @@ class RCBuilder(SubsystemBuilderBase):
         A dict of names for the propeller subsystem.
         """
         # TODO bounds are rough placeholders
-        # TODO add the rest of the resign variables, also remove the feature as an external subsystem
-        # TODO check with eliot about adding potentially new design variables (i.e. kv can be declared or calculated)
+        # TODO potentially work on optimizing the voltage
         DVs = {
             Aircraft.Battery.MASS: {
                 'units': 'kg',
@@ -75,6 +76,8 @@ class RCBuilder(SubsystemBuilderBase):
                 # 'val': 8,  # initial value
             },
 
+            #TODO: check if velocity is to be added here? 
+
         }
         return DVs
 
@@ -106,10 +109,6 @@ class RCBuilder(SubsystemBuilderBase):
             Aircraft.Battery.RESISTANCE: {
                 'val': 0.05, 
                 'units': 'ohm',
-            },
-            Dynamic.Vehicle.Propulsion.THROTTLE: {
-                'val': 0.5,  
-                'units': 'unitless',
             },
             Aircraft.Engine.Motor.RESISTANCE: {
                 'val': 0.05,  
