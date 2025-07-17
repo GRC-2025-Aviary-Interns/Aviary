@@ -1,6 +1,6 @@
 import numpy as np
 import openmdao.api as om
-
+import openmdao.jax as omj
 from aviary.variable_info.functions import add_aviary_input, add_aviary_option, add_aviary_output
 from aviary.variable_info.variables import Aircraft, Dynamic, Settings
 
@@ -55,6 +55,7 @@ class Battery(om.ExplicitComponent):
         partials['power', Aircraft.Battery.RESISTANCE] = -I**2
 
 
+
 class ElectronicSpeedController(om.ExplicitComponent):
     def initialize(self):
         self.options.declare('num_nodes', default=1, types=int)
@@ -72,13 +73,13 @@ class ElectronicSpeedController(om.ExplicitComponent):
 
         self.add_output('efficiency', val=np.zeros(nn), units='unitless')
         self.add_output('voltage_out', val=np.zeros(nn), units = 'V')
-        self.add_output('current_out', val=np.zeros(nn), units = 'A')
+        # self.add_output('current_out', val=np.zeros(nn), units = 'A')
         self.add_output('power', val=np.zeros(nn), units = 'W')
         ar = np.arange(nn)
 
         self.declare_partials('efficiency', Dynamic.Vehicle.Propulsion.THROTTLE, rows=ar, cols=ar)
         self.declare_partials('voltage_out', ['voltage_in', Dynamic.Vehicle.Propulsion.THROTTLE], rows=ar, cols=ar)
-        self.declare_partials('current_out', ['current_in', Dynamic.Vehicle.Propulsion.THROTTLE], rows=ar, cols=ar)
+        # self.declare_partials('current_out', ['current_in', Dynamic.Vehicle.Propulsion.THROTTLE], rows=ar, cols=ar)
         self.declare_partials('power', ['voltage_in', 'current_in', Dynamic.Vehicle.Propulsion.THROTTLE], rows=ar, cols=ar)
 
     def compute(self, inputs, outputs):
@@ -86,10 +87,12 @@ class ElectronicSpeedController(om.ExplicitComponent):
         a = self.options['n']
         b = self.options['o']
         c = self.options['p']
-        outputs['efficiency'] = a * (1 - 1 / (1 + b*inputs[Dynamic.Vehicle.Propulsion.THROTTLE]**c))
+        thr = inputs[Dynamic.Vehicle.Propulsion.THROTTLE]
+        transition = 0.05
+        m = a*b*c*transition**(c - 1) / (b*transition**c + 1)**2
 
+        outputs['efficiency'] = np.where(thr >= transition, a * (1 - 1 / (1 + b*thr**c)), m* thr + ((a * (1 - 1 / (1 + b*transition**c)))-m*transition))
         outputs['voltage_out'] = inputs['voltage_in'] * inputs[Dynamic.Vehicle.Propulsion.THROTTLE] * outputs['efficiency']
-        outputs['current_out'] = inputs['current_in'] / inputs[Dynamic.Vehicle.Propulsion.THROTTLE]
         outputs['power'] = (outputs['efficiency'] - 1) * inputs['current_in'] * inputs['voltage_in']
 
     def compute_partials(self, inputs, partials):
@@ -98,15 +101,16 @@ class ElectronicSpeedController(om.ExplicitComponent):
         b = self.options['o']
         c = self.options['p']
         t = inputs[Dynamic.Vehicle.Propulsion.THROTTLE]
-        efficiency = a * (1 - 1 / (1 + b*t**c))
-        partials['efficiency', Dynamic.Vehicle.Propulsion.THROTTLE] = a*b*c*t**(c - 1) / (b*t**c + 1)**2
+        transition=0.05
+
+        m = a*b*c*transition**(c - 1) / (b*transition**c + 1)**2
+        efficiency = np.where(t >= transition, a * (1 - 1 / (1 + b*t**c)), m*t + ((a * (1 - 1 / (1 + b*transition**c)))-m*transition))
+
+        partials['efficiency', Dynamic.Vehicle.Propulsion.THROTTLE] = np.where(t>=transition, a*b*c*t**(c - 1) / (b*t**c + 1)**2, m)
 
         partials['voltage_out', 'voltage_in'] = inputs[Dynamic.Vehicle.Propulsion.THROTTLE] * efficiency
         partials['voltage_out', Dynamic.Vehicle.Propulsion.THROTTLE] = inputs['voltage_in'] * (efficiency + inputs[Dynamic.Vehicle.Propulsion.THROTTLE] * partials['efficiency', Dynamic.Vehicle.Propulsion.THROTTLE])
-
-        partials['current_out', 'current_in'] = 1 / inputs[Dynamic.Vehicle.Propulsion.THROTTLE]
-        partials['current_out', Dynamic.Vehicle.Propulsion.THROTTLE] = -inputs['current_in'] / inputs[Dynamic.Vehicle.Propulsion.THROTTLE]**2
-
+        
         partials['power', 'voltage_in'] = (efficiency - 1) * inputs['current_in']
         partials['power', 'current_in'] = (efficiency - 1) * inputs['voltage_in']
         partials['power', Dynamic.Vehicle.Propulsion.THROTTLE] = inputs['current_in'] * inputs['voltage_in'] * partials['efficiency', Dynamic.Vehicle.Propulsion.THROTTLE]
@@ -196,112 +200,6 @@ class Motor(om.ExplicitComponent):
         partials['current_con', Aircraft.Engine.Motor.PEAK_CURRENT] = -1
         partials['current_con', 'current'] = 1
 
-# class Motor(om.ExplicitComponent):
-#     def initialize(self):
-#         self.options.declare('num_nodes', default=1, types=int)
-#     def setup(self):
-#         nn = self.options['num_nodes']
-
-#         add_aviary_input(self, Aircraft.Engine.Motor.IDLE_CURRENT, val=0.0, units='A')
-#         add_aviary_input(self, Aircraft.Engine.Motor.PEAK_CURRENT, val=0.0, units='A')
-#         add_aviary_input(self, Aircraft.Engine.Motor.RESISTANCE, val=0.0, units='ohm')
-#         add_aviary_input(self, Aircraft.Engine.Motor.KV, val=0.0, units = 'rpm/ V')
-#         add_aviary_input(self, Aircraft.Engine.Motor.MASS, val=0.0, units ='kg')
-#         self.add_input('voltage_in', val=np.zeros(nn), units = 'V')
-#         self.add_input('current', val=np.zeros(nn), units = 'A')
-
-#         add_aviary_output(self, Aircraft.Engine.Motor.KV, val=0.0, units='rpm/V')
-#         add_aviary_output(self, Dynamic.Vehicle.Propulsion.RPM, val=np.zeros(nn), units='rpm')
-#         self.add_output('power', val=np.zeros(nn), units='W')
-#         self.add_output('current_con', val=np.zeros(nn), units="A")
-#         ar=np.arange(nn)
-
-#         self.declare_partials(
-#             [
-#                 Dynamic.Vehicle.Propulsion.RPM, 
-#                 'power'
-#             ], 
-#             [
-#                 'voltage_in', 
-#                 'current', 
-#             ],
-#             rows=ar, cols=ar
-#         )
-
-#         self.declare_partials(
-#             [Dynamic.Vehicle.Propulsion.RPM,], 
-#             [
-#                 Aircraft.Engine.Motor.IDLE_CURRENT, 
-#                 Aircraft.Engine.Motor.PEAK_CURRENT, 
-#                 Aircraft.Engine.Motor.MASS
-#             ],
-#         )
-
-#         self.declare_partials(
-#             [Aircraft.Engine.Motor.KV],
-#             [
-#                 Aircraft.Engine.Motor.PEAK_CURRENT, 
-#                 Aircraft.Engine.Motor.MASS,
-#             ],
-#         )
-#         self.declare_partials(
-#             ['power'], 
-#             [Aircraft.Engine.Motor.IDLE_CURRENT]
-#         )
-
-#         self.declare_partials(
-#             'current_con',
-#             'current',
-#             rows=ar, cols=ar
-#         )
-
-#         self.declare_partials(
-#             'current_con', 
-#             Aircraft.Engine.Motor.PEAK_CURRENT,
-#         )
-
-#     def compute(self, inputs, outputs):
-#         # TODO: DO THIS TOMORROW, add derivatives (ESPECIALLY FOR IDLE CURRENT AFTER RESISTANCE CHANGES!), test same stuff, make the builder for pre and mission. 
-#         m = self.options['m']
-#         b = self.options['b'] #TODO: CITE
-
-        
-#         R = 0.0467 * inputs[Aircraft.Engine.Motor.IDLE_CURRENT] ** -1.892 #TODO: CITE
-#         outputs[Aircraft.Engine.Motor.KV] = m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / inputs[Aircraft.Engine.Motor.MASS] + b
-#         voltage_prop = inputs['voltage_in'] - inputs['current'] * R
-        
-#         outputs[Dynamic.Vehicle.Propulsion.RPM] = outputs[Aircraft.Engine.Motor.KV] * voltage_prop
-#         outputs['power'] = -inputs['current']**2 * R - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * voltage_prop
-#         outputs["current_con"] = inputs["current"] - inputs[Aircraft.Engine.Motor.PEAK_CURRENT] #TODO: Verify this is the best way to do
-
-#     def compute_partials(self, inputs, partials):
-#         m = self.options['m']
-#         b = self.options['b']
-
-#         R =  0.0467 * inputs[Aircraft.Engine.Motor.IDLE_CURRENT] ** -1.892
-#         voltage_prop = inputs['voltage_in'] - inputs['current'] * R
-#         dvoltage_prop_dvoltage_in = 1
-#         dvoltage_prop_dcurrent = -R
-#         dresistance_didle_current = -0.0883564 / inputs[Aircraft.Engine.Motor.IDLE_CURRENT]**2.892
-#         dvoltage_prop_didle_current = inputs['current'] * 0.0883564 / inputs[Aircraft.Engine.Motor.IDLE_CURRENT]**2.892
-#         kv = m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / inputs[Aircraft.Engine.Motor.MASS] + b
-
-#         partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.PEAK_CURRENT] = m / inputs[Aircraft.Engine.Motor.MASS] 
-#         partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.MASS] = -m * inputs[Aircraft.Engine.Motor.PEAK_CURRENT] / (inputs[Aircraft.Engine.Motor.MASS]**2)
-
-#         partials[Dynamic.Vehicle.Propulsion.RPM, 'voltage_in'] = kv * dvoltage_prop_dvoltage_in
-#         partials[Dynamic.Vehicle.Propulsion.RPM, 'current'] = kv * dvoltage_prop_dcurrent
-#         partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.PEAK_CURRENT] = partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.PEAK_CURRENT] * voltage_prop
-#         partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.MASS] = partials[Aircraft.Engine.Motor.KV, Aircraft.Engine.Motor.MASS] * voltage_prop
-#         partials[Dynamic.Vehicle.Propulsion.RPM, Aircraft.Engine.Motor.IDLE_CURRENT] = kv * dvoltage_prop_didle_current
-
-#         partials['power', 'voltage_in'] = -inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * dvoltage_prop_dvoltage_in
-#         partials['power', 'current'] = -2 * inputs['current'] * R - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * dvoltage_prop_dcurrent
-#         partials['power', Aircraft.Engine.Motor.IDLE_CURRENT] = (-inputs['current']**2 * dresistance_didle_current) - voltage_prop - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * dvoltage_prop_didle_current 
-#         # partials['power', Aircraft.Engine.Motor.IDLE_CURRENT] = -voltage_prop * dvoltage_prop_didle_current
-        
-#         partials['current_con', Aircraft.Engine.Motor.PEAK_CURRENT] = -1
-#         partials['current_con', 'current'] = 1
 
 #TODO: reading in of data should be changed later:
 from aviary.subsystems.propulsion.rc_electric.Parsing.PropDataReader import PropDataReader
@@ -516,10 +414,10 @@ class RCPropGroup(om.Group):
 
         self.connect('battery.voltage_out', 'esc.voltage_in')
         self.connect('esc.voltage_out', 'motor.voltage_in')
-        self.connect('esc.current_out', 'motor.current')
+        # self.connect('esc.current_out', 'motor.current')
 
 
         self.connect('battery.power', 'power_net.power_batt')
         self.connect('esc.power', 'power_net.power_esc')
         self.connect('motor.power', 'power_net.power_motor')
-        self.connect('power_net.current', ['battery.current', 'esc.current_in'])
+        self.connect('power_net.current', ['battery.current', 'esc.current_in', 'motor.current'])

@@ -27,8 +27,7 @@ class RCPropMission(om.Group):
             'battery', 
             Battery(num_nodes=nn), 
             promotes_inputs=[
-                Aircraft.Battery.VOLTAGE, 
-                # Aircraft.Battery.MASS, 
+                Aircraft.Battery.VOLTAGE,  
                 Aircraft.Battery.RESISTANCE
             ]
         )
@@ -97,10 +96,18 @@ class RCPropMission(om.Group):
 
         self.connect('battery.voltage_out', 'esc.voltage_in')
         self.connect('esc.voltage_out', 'motor.voltage_in')
-        self.connect('esc.current_out', 'motor.current')
+        # self.connect('esc.current_out', 'motor.current')
 
 
         self.connect('battery.power', 'power_net.power_batt')
         self.connect('esc.power', 'power_net.power_esc')
         self.connect('motor.power', 'power_net.power_motor')
-        self.connect('power_net.current', ['battery.current', 'esc.current_in'])
+        self.connect('power_net.current', ['battery.current', 'esc.current_in', 'motor.current'])
+
+        self.nonlinear_solver = om.NewtonSolver(solve_subsystems=True)
+        self.nonlinear_solver.options["maxiter"] = 30
+        self.nonlinear_solver.options["err_on_non_converge"] = False
+        self.nonlinear_solver.linesearch = om.BoundsEnforceLS()
+        self.nonlinear_solver.linesearch.options["bound_enforcement"] = "scalar"
+        self.nonlinear_solver.linesearch.options["print_bound_enforce"] = True
+        self.linear_solver = om.DirectSolver(assemble_jac=True)#, rhs_checking =True)
