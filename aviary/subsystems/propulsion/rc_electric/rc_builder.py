@@ -1,13 +1,14 @@
 from aviary.subsystems.propulsion.rc_electric.model.rcpropulsion_premission import RCPropPreMission
 from aviary.subsystems.propulsion.rc_electric.model.rcpropulsion_mission import RCPropMission
-
+from aviary.utils.aviary_values import AviaryValues
 from aviary.subsystems.subsystem_builder_base import SubsystemBuilderBase
 from aviary.variable_info.variables import Aircraft, Dynamic, Mission
 
 class RCBuilder(SubsystemBuilderBase):
     def __init__(self, name='rc_eletric'):
         """Initializes the PropellerBuilder object with a given name."""
-        super().__init__(name)
+        aviary_inputs = AviaryValues()
+        super().__init__(name, options=aviary_inputs)
 
     def build_pre_mission(self, m, b, aviary_inputs):
         """Builds an OpenMDAO system for the pre-mission computations of the subsystem."""

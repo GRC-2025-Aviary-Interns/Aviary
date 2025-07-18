@@ -39,7 +39,7 @@ class RCPropPreMission(om.Group):
                 battery_mass={'val': 0.0, 'units': 'kg'},
             ),
             promotes_inputs=[('battery_mass', Aircraft.Battery.MASS), ('voltage_in', Aircraft.Battery.VOLTAGE)],
-            promotes_outputs=[('energy'), Aircraft.Battery.ENERGY_CAPACITY],
+            promotes_outputs=[('energy', Aircraft.Battery.ENERGY_CAPACITY)],
         )
 
         self.add_subsystem(
@@ -57,13 +57,16 @@ class RCPropPreMission(om.Group):
         self.add_subsystem(
             'motor_kv_calc',
             om.ExecComp(
-                'kv = m * peak_current / motor_mass + b'
+                'kv = m * peak_current / motor_mass + b',
+                kv={'val': 0.0, 'units': 'rpm/V'},
+                peak_current={'val': 0.0, 'units': 'A'},
+                motor_mass={'val': 0.0, 'units': 'kg'},
+                m=self.options['m'],
+                b=self.options['b'],
             ),
             promotes_inputs=[
                 ('peak_current', Aircraft.Engine.Motor.PEAK_CURRENT),
-                ('motor_mass', Aircraft.Engine.Motor.MASS)
-                ('m', self.options['m']),
-                ('b', self.options['b']),
+                ('motor_mass', Aircraft.Engine.Motor.MASS),
             ],
             promotes_outputs=[('kv', Aircraft.Engine.Motor.KV)]
         )
