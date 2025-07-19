@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+import os
 
 def PropDataReader():
     """A function to read in propulsion data to ndarrays and apply reasonable
@@ -18,8 +18,12 @@ def PropDataReader():
 
     # Opening data files
     # CHANGE THESE TO THE FILE PATH
-    fx = open("aviary\subsystems\propulsion\\rc_electric\Parsing\prop_xt.dat", "r")
-    fy = open("aviary\subsystems\propulsion\\rc_electric\Parsing\prop_yt.dat", "r")
+    base_path = os.path.dirname(__file__)
+    file_xt= os.path.join(base_path, 'prop_xt.dat')
+    file_yt= os.path.join(base_path, 'prop_yt.dat')
+
+    fx = open(file_xt, "r")
+    fy = open(file_yt, "r")
 
     # Looping through lines of .dat file
     for xline, yline in zip(fx.readlines(), fy.readlines()):
