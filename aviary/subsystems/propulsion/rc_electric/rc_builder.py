@@ -8,13 +8,13 @@ class RCBuilder(SubsystemBuilderBase):
     def __init__(self, name='rc_eletric'):
         """Initializes the PropellerBuilder object with a given name."""
         aviary_inputs = AviaryValues()
-        super().__init__(name, options=aviary_inputs)
+        super().__init__(name)
 
     def build_pre_mission(self, m, b, aviary_inputs):
         """Builds an OpenMDAO system for the pre-mission computations of the subsystem."""
         return RCPropPreMission(m=m, b=b, aviary_options=aviary_inputs)
 
-    def build_mission(self, num_nodes, aviary_inputs):
+    def build_mission(num_nodes, aviary_inputs):
         """Builds an OpenMDAO system for the mission computations of the subsystem."""
         return RCPropMission(num_nodes=num_nodes, aviary_options=aviary_inputs)
 

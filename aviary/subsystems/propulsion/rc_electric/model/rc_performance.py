@@ -7,14 +7,12 @@ from aviary.variable_info.variables import Aircraft, Dynamic, Settings
 class Battery(om.ExplicitComponent):
     def initialize(self):
         self.options.declare('num_nodes', default=1, types=int)
-        # add_aviary_option(self, Settings.VERBOSITY)
 
     def setup(self):
         nn = self.options['num_nodes']
 
         #TODO: add Battery options
         add_aviary_input(self, Aircraft.Battery.VOLTAGE, val=0.0, units = "V")
-        # add_aviary_input(self, Aircraft.Battery.MASS, val=0.0, units='kg')
         add_aviary_input(self, Aircraft.Battery.RESISTANCE, val=0.0, units='ohm')
         self.add_input('current', val=np.zeros(nn), units='A')
 
@@ -73,13 +71,11 @@ class ElectronicSpeedController(om.ExplicitComponent):
 
         self.add_output('efficiency', val=np.zeros(nn), units='unitless')
         self.add_output('voltage_out', val=np.zeros(nn), units = 'V')
-        # self.add_output('current_out', val=np.zeros(nn), units = 'A')
         self.add_output('power', val=np.zeros(nn), units = 'W')
         ar = np.arange(nn)
 
         self.declare_partials('efficiency', Dynamic.Vehicle.Propulsion.THROTTLE, rows=ar, cols=ar)
         self.declare_partials('voltage_out', ['voltage_in', Dynamic.Vehicle.Propulsion.THROTTLE], rows=ar, cols=ar)
-        # self.declare_partials('current_out', ['current_in', Dynamic.Vehicle.Propulsion.THROTTLE], rows=ar, cols=ar)
         self.declare_partials('power', ['voltage_in', 'current_in', Dynamic.Vehicle.Propulsion.THROTTLE], rows=ar, cols=ar)
 
     def compute(self, inputs, outputs):
@@ -170,14 +166,13 @@ class Motor(om.ExplicitComponent):
         )
 
     def compute(self, inputs, outputs):
-        #TODO: Add computation for no given kv, optimizing the motor
         R = inputs[Aircraft.Engine.Motor.RESISTANCE]
         kv = inputs[Aircraft.Engine.Motor.KV]
         voltage_prop = inputs['voltage_in'] - inputs['current'] * R
 
         outputs[Dynamic.Vehicle.Propulsion.RPM] = kv * voltage_prop
         outputs['power'] = -inputs['current']**2 * R - inputs[Aircraft.Engine.Motor.IDLE_CURRENT] * voltage_prop
-        outputs["current_con"] = inputs["current"] - inputs[Aircraft.Engine.Motor.PEAK_CURRENT] #TODO: Verify this is the best way to do
+        outputs["current_con"] = inputs["current"] - inputs[Aircraft.Engine.Motor.PEAK_CURRENT] #TODO: Verify this is the best way to do (add_constraints option)
 
     def compute_partials(self, inputs, partials):
         R = inputs[Aircraft.Engine.Motor.RESISTANCE]
@@ -242,7 +237,6 @@ class Propeller(om.ExplicitComponent):
         add_aviary_output(self, Dynamic.Vehicle.Propulsion.PROP_POWER, val=np.zeros(nn), units='W')
         ar =np.arange(nn)
 
-        # self.declare_partials('*', '*', method='cs')
         self.declare_partials(
             Dynamic.Vehicle.Propulsion.THRUST,
             [
@@ -310,7 +304,7 @@ class PowerResiduals(om.ImplicitComponent):
         self.add_input('power_batt', val=np.zeros(nn), units='W')
         self.add_input('power_esc', val=np.zeros(nn), units='W')
         self.add_input('power_motor', val=np.zeros(nn), units='W')
-        add_aviary_input(self, Dynamic.Vehicle.Propulsion.PROP_POWER, val=np.zeros(nn), units='W') #TODO verify no connection needed in group
+        add_aviary_input(self, Dynamic.Vehicle.Propulsion.PROP_POWER, val=np.zeros(nn), units='W') 
         
         #We want to make a good initial guess on the current
         self.add_output('current', val=np.ones(nn)*30, units='A') 
@@ -414,7 +408,6 @@ class RCPropGroup(om.Group):
 
         self.connect('battery.voltage_out', 'esc.voltage_in')
         self.connect('esc.voltage_out', 'motor.voltage_in')
-        # self.connect('esc.current_out', 'motor.current')
 
 
         self.connect('battery.power', 'power_net.power_batt')
