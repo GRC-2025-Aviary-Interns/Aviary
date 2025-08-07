@@ -4,6 +4,7 @@ from aviary.examples.external_subsystems.dbf_based_mass.dbf_wing import DBFWingM
 from aviary.examples.external_subsystems.dbf_based_mass.dbf_fuselage import DBFFuselageMass
 from aviary.examples.external_subsystems.dbf_based_mass.dbf_horizontaltail import DBFHorizontalTailMass
 from aviary.examples.external_subsystems.dbf_based_mass.dbf_verticaltail import DBFVerticalTailMass
+from aviary.examples.external_subsystems.dbf_based_mass.mass_summation import MassSummation
 
 from aviary.variable_info.variables import Aircraft
 
@@ -36,4 +37,11 @@ class MassPremission(om.Group):
             DBFFuselageMass(),
             promotes_inputs=['*'],
             promotes_outputs=[Aircraft.Fuselage.MASS],
+        )
+
+        self.add_subsystem(
+            'mass_group', 
+            MassSummation(), 
+            promotes_inputs=['*'], 
+            promotes_outputs=['*']
         )
