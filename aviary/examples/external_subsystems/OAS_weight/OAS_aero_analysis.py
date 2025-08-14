@@ -308,7 +308,7 @@ class OASAero(om.Group):
             'mesh': htail_mesh,
             'fem_model_type': 'tube',
             't_over_c': aviary_inputs.get_val(Aircraft.HorizontalTail.THICKNESS_TO_CHORD),
-            'c_max_t': 0.3, # NACA 00 series. never use a diff airfoil ever. 
+            'c_max_t': 0.3, # NACA 00 series
 
             'with_viscous': False, 
             'with_wave': False,

@@ -172,7 +172,7 @@ class LandingGearDrag(om.ExplicitComponent):
         partials['D_gear', Aircraft.Wing.AREA] = CD_gear * q
 
 class Averages(om.ExplicitComponent):
-    # averages because Aviary objectives must be scalar
+    # averages because Aviary objectives must be scalar. not doing this would be preferable
     def initialize(self):
         self.options.declare('num_nodes', types=int)
 
