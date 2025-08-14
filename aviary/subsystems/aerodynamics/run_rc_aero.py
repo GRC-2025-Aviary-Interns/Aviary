@@ -55,7 +55,7 @@ phase_info['cruise']['user_options']['num_segments'] = 1
 max_iter = 30 
 optimizer = 'IPOPT' 
 
-prob = av.AviaryProblem()
+prob = av.AviaryProblem(verbosity=1)
 
 prob.load_inputs('models/test_aircraft/aircraft_for_bench_FwFm.csv', phase_info=phase_info)
 
@@ -100,8 +100,7 @@ prob.add_driver(optimizer=optimizer, max_iter=max_iter)
 prob.add_design_variables()
 
 prob.model.add_design_var('aircraft:wing:span', lower=0.1, upper=2.0)
-
-prob.model.add_design_var('traj.cruise.rhs_all.rc_aero_analysis.alpha', lower=-5.0, upper=15.0)
+prob.model.add_design_var('traj.cruise.rhs_all.rc_aero_analysis.alpha', lower=-5.0, upper=20.0, scaler=0.1)
 
 # prob.model.add_constraint('traj.cruise.rhs_all.rc_aero_analysis.lifting_surface_CL', lower=0.01, upper=0.2)
 prob.model.add_objective('traj.cruise.rhs_all.rc_aero_analysis.avg_CD', scaler=1)
@@ -111,10 +110,22 @@ prob.driver.recording_options['record_responses'] = False
 prob.driver.recording_options['record_objectives'] = False
 prob.driver.recording_options['record_constraints'] = False
 
+prob.driver.opt_settings.update({
+    'tol': 5e-4,
+    'constr_viol_tol': 1e-6,
+    'acceptable_tol': 1e-5,
+    'acceptable_constr_viol_tol': 5e-3,
+    'line_search_method': 'filter',
+    'alpha_for_y': 'primal'
+})
+
+
 prob.setup()
 prob.set_val('traj.cruise.rhs_all.rc_aero_analysis.alpha', np.array([10.0, 10.0, 10.0, 10.0]), units='deg')
 
 prob.set_initial_guesses()
+
+# prob.run_model()
 
 prob.run_aviary_problem()
 
