@@ -33,11 +33,12 @@ class FuselageDrag(om.ExplicitComponent):
         self.add_output(name='D_fus', shape=(nn,), units='N') # fuselage drag
         self.add_output(name='CD_fus', shape=(nn,), units='unitless') # fuselage CD0
 
-        self.declare_partials('D_fus', [Aircraft.Fuselage.LENGTH,
-                                        Aircraft.Fuselage.MAX_HEIGHT,
-                                        Aircraft.Fuselage.MAX_WIDTH,
-                                        Aircraft.Wing.AREA],
-                                        method='cs')
+        # self.declare_partials('D_fus', [Aircraft.Fuselage.LENGTH,
+        #                                 Aircraft.Fuselage.MAX_HEIGHT,
+        #                                 Aircraft.Fuselage.MAX_WIDTH,
+        #                                 Aircraft.Wing.AREA],
+        #                                 method='cs')
+        self.declare_partials('*', '*', method='cs')
         
     def compute(self, inputs, outputs): 
         R_wf = inputs[Aircraft.Wing.FUSELAGE_INTERFERENCE_FACTOR]
@@ -92,10 +93,12 @@ class VTailDrag(om.ExplicitComponent):
         self.add_output(name='D_vtail', shape=(nn,), units='N') # vtail drag
         self.add_output(name='CD_vtail', shape=(nn,), units='unitless') # vtail CD0
 
-        self.declare_partials('D_vtail', [Aircraft.VerticalTail.ROOT_CHORD,
-                                          Aircraft.VerticalTail.TAPER_RATIO,
-                                          Aircraft.VerticalTail.SPAN,
-                                          Aircraft.Wing.AREA])
+        # self.declare_partials('D_vtail', [Aircraft.VerticalTail.ROOT_CHORD,
+        #                                   Aircraft.VerticalTail.TAPER_RATIO,
+        #                                   Aircraft.VerticalTail.SPAN,
+        #                                   Aircraft.Wing.AREA])
+
+        self.declare_partials('*', '*', method='cs')
         
     def compute(self, inputs, outputs):
         R_LS = inputs['R_LS']
@@ -117,7 +120,7 @@ class VTailDrag(om.ExplicitComponent):
         outputs['D_vtail'] = q * S_ref_vtail * CD0_vtail
         outputs['CD_vtail'] = CD0_vtail # lift induced negligible
 
-    def compute_partials(self, inputs, partials):
+    def ZZZcompute_partials(self, inputs, partials):
         R_LS = inputs['R_LS']
         Cf_vtail = inputs['Cf_vtail']
         L_prime = inputs['L_prime']
@@ -149,9 +152,11 @@ class LandingGearDrag(om.ExplicitComponent):
         self.add_output('D_gear', shape=(nn,), units='N')
         self.add_output('CD_gear', shape=(nn,), units='unitless')
 
-        self.declare_partials('D_gear', [Aircraft.LandingGear.DRAG_COEFFICIENT,
-                                         Dynamic.Atmosphere.DYNAMIC_PRESSURE,
-                                         Aircraft.Wing.AREA])
+        # self.declare_partials('D_gear', [Aircraft.LandingGear.DRAG_COEFFICIENT,
+        #                                  Dynamic.Atmosphere.DYNAMIC_PRESSURE,
+        #                                  Aircraft.Wing.AREA])
+
+        self.declare_partials('*', '*', method='cs')
 
     def compute(self, inputs, outputs):
         CD_gear = inputs[Aircraft.LandingGear.DRAG_COEFFICIENT]
@@ -161,7 +166,7 @@ class LandingGearDrag(om.ExplicitComponent):
         outputs['D_gear'] = CD_gear * q * S_ref
         outputs['CD_gear'] = CD_gear
 
-    def compute_partials(self, inputs, partials):
+    def ZZZcompute_partials(self, inputs, partials):
         CD_gear = inputs[Aircraft.LandingGear.DRAG_COEFFICIENT]
         q = inputs[Dynamic.Atmosphere.DYNAMIC_PRESSURE]
         S_ref = inputs[Aircraft.Wing.AREA]
