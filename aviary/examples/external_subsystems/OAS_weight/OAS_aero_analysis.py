@@ -32,15 +32,16 @@ class AeroConditions(om.ExplicitComponent):
         self.add_output(name='dynamic_viscosity', shape=nn, units='kg/m/s')
         self.add_output(name='re', shape=nn, units='1/m')
 
-        rows_cols = np.arange(nn)
-        self.declare_partials('re', Dynamic.Mission.VELOCITY, rows=rows_cols, cols=rows_cols)
-        self.declare_partials('re', Aircraft.Wing.ROOT_CHORD)
-        self.declare_partials(Dynamic.Atmosphere.DYNAMIC_PRESSURE, Dynamic.Mission.VELOCITY, rows=rows_cols, cols=rows_cols)
+        self.declare_partials('*', '*', method='fd')
+        # rows_cols = np.arange(nn)
+        # self.declare_partials('re', Dynamic.Mission.VELOCITY, rows=rows_cols, cols=rows_cols)
+        # self.declare_partials('re', Aircraft.Wing.ROOT_CHORD)
+        # self.declare_partials(Dynamic.Atmosphere.DYNAMIC_PRESSURE, Dynamic.Mission.VELOCITY, rows=rows_cols, cols=rows_cols)
 
-        self.declare_partials(Dynamic.Atmosphere.TEMPERATURE, '*', method='fd')
-        self.declare_partials(Dynamic.Atmosphere.DENSITY, '*', method='fd')
-        self.declare_partials('dynamic_viscosity', '*', method='fd')
-        self.declare_partials(Dynamic.Atmosphere.KINEMATIC_VISCOSITY, '*', method='fd')
+        # self.declare_partials(Dynamic.Atmosphere.TEMPERATURE, '*', method='fd')
+        # self.declare_partials(Dynamic.Atmosphere.DENSITY, '*', method='fd')
+        # self.declare_partials('dynamic_viscosity', '*', method='fd')
+        # self.declare_partials(Dynamic.Atmosphere.KINEMATIC_VISCOSITY, '*', method='fd')
 
     def compute(self, inputs, outputs):
         V = inputs[Dynamic.Mission.VELOCITY]
@@ -69,7 +70,7 @@ class AeroConditions(om.ExplicitComponent):
         outputs['re'] = Re
         outputs[Dynamic.Atmosphere.DYNAMIC_PRESSURE] = 0.5 * rho * V**2
 
-    def compute_partials(self, inputs, partials):
+    def ZZZcompute_partials(self, inputs, partials):
         V = inputs[Dynamic.Mission.VELOCITY]
         L = inputs[Aircraft.Wing.ROOT_CHORD]
         h = inputs[Dynamic.Mission.ALTITUDE]
@@ -213,7 +214,7 @@ class AlphaComp(om.ImplicitComponent):
 
         partials['alpha', Dynamic.Vehicle.LIFT] = np.ones(nn)
         partials['alpha', Dynamic.Vehicle.MASS] = -g * np.cos(a)
-        partials['alpha', 'alpha'] = m * g * np.sin(a)
+        partials['alpha', 'alpha'] = m * g * np.sin(a) * np.pi / 180
 
 
 class OASAero(om.Group):

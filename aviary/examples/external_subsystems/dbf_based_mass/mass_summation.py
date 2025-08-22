@@ -64,8 +64,9 @@ class StructureMass(om.ExplicitComponent):
                          units='kg')
         
         # More masses can be added, i.e., tail, spars, flaps, etc. as needed
-
         add_aviary_output(self, Aircraft.Design.STRUCTURE_MASS, units='kg')
+
+        self.declare_partials('*', '*', method='cs')
 
     def compute(self, inputs, outputs):
         outputs[Aircraft.Design.STRUCTURE_MASS] = (
@@ -82,6 +83,8 @@ class TotalMass(om.ExplicitComponent):
         add_aviary_input(self, Aircraft.Engine.Motor.MASS, val=0.0, units='kg')
 
         add_aviary_output(self, Aircraft.Design.OPERATING_MASS, units='kg')
+
+        self.declare_partials('*', '*', method='cs')
 
     def compute(self, inputs, outputs):
         outputs[Aircraft.Design.OPERATING_MASS] = (
