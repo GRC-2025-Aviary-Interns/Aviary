@@ -132,8 +132,10 @@ prob.set_val('traj.cruise.rhs_all.rc_aero_analysis.alpha', np.array([10.0, 10.0,
 prob.set_initial_guesses()
 
 # Run the problem
-prob.run_aviary_problem(suppress_solver_print=False)
-# prob.run_model()
+# prob.run_aviary_problem(suppress_solver_print=False)
+prob.run_model()
+
+prob.check_partials(method='fd', step=1.01e-6, compact_print=True, includes=['*htail*'])
 
 # Output results
 with open("variables.txt", "w") as f:
